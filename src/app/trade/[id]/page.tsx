@@ -79,11 +79,15 @@ export default function TradePage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Payment failed"); return; }
-      // If we got a payment URL back, open it
-      if (data.payment_url || data.url) {
-        window.open(data.payment_url || data.url, "_blank");
+ 
+      // Redirect to Monetbil payment page
+      const payUrl = data.payment_url || data.url || data.paymentUrl;
+      if (payUrl) {
+        window.location.href = payUrl; // full redirect so Monetbil can return back
+      } else {
+        // No URL returned — mark as paid directly (test mode)
+        await load();
       }
-      await load();
     } catch { setError("Something went wrong"); }
     finally { setActing(false); }
   }
