@@ -68,11 +68,7 @@ export default function LoginPage() {
           No account?{" "}
           <Link href="/auth/register" style={{ color: "#4ade80", fontWeight: 600, textDecoration: "none" }}>Create one</Link>
         </p>
-        <div style={{ marginTop: 16, padding: "12px", background: "rgba(34,197,94,0.05)", borderRadius: 8, border: "1px solid rgba(74,222,128,0.1)" }}>
-          <p style={{ fontSize: 11, color: "#6b7280", margin: 0, textAlign: "center" }}>
-            Admin demo: <span style={{ fontFamily: "monospace", color: "#4ade80" }}>admin@safetrade.com</span> / <span style={{ fontFamily: "monospace", color: "#4ade80" }}>admin123</span>
-          </p>
-        </div>
+        
       </div>
     </div>
   );
