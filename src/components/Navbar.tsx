@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ShieldCheck, LayoutDashboard, Plus, LogOut, Menu, X } from "lucide-react";
+import { ShieldCheck, LayoutDashboard, Plus, LogOut, Menu, X, Banknote } from "lucide-react";
 import { useState } from "react";
 
 interface NavbarProps {
@@ -24,13 +24,16 @@ export default function Navbar({ user }: NavbarProps) {
   const roleBg    = user.role === "vendor" ? "rgba(167,139,250,0.1)" : user.role === "admin" ? "rgba(245,158,11,0.1)" : "rgba(34,197,94,0.1)";
 
   const navLinks = user.role === "admin"
-    ? [{ href: "/admin",      label: "Admin Panel", icon: <LayoutDashboard size={14} />, primary: false }]
-    : [
-        { href: "/dashboard", label: "Dashboard",   icon: <LayoutDashboard size={14} />, primary: false },
-        ...(user.role === "vendor"
-          ? [{ href: "/trade/new", label: "New Trade", icon: <Plus size={14} />, primary: true }]
-          : []),
-      ];
+  ? [{ href: "/admin",    label: "Admin Panel", icon: <LayoutDashboard size={14} />, primary: false }]
+  : [
+      { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={14} />, primary: false },
+      ...(user.role === "vendor"
+        ? [
+            { href: "/trade/new", label: "New Trade",        icon: <Plus size={14} />,    primary: true  },
+            { href: "/withdraw",  label: "Withdraw funds",   icon: <Banknote size={14} />, primary: false },
+          ]
+        : []),
+    ];
 
   return (
     <>
