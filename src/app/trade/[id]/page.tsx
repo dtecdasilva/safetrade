@@ -399,12 +399,12 @@ export default function TradePage() {
         {isVendor && trade.status === "funds_held" && (
           <div className="trade-card" style={{ ...card, border: "1px solid rgba(167,139,250,0.2)" }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: "#a78bfa", marginBottom: 8 }}>Mark as shipped</p>
-            <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 12 }}>Funds are locked in escrow. Ship the item and enter a tracking number.</p>
+            <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 12 }}>Funds are locked in escrow. Ship the item and enter the item Number.</p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <input
                 value={tracking}
                 onChange={e => setTracking(e.target.value)}
-                placeholder="Tracking number (optional)"
+                placeholder="Item number (optional)"
                 style={{ flex: 1, minWidth: 160, padding: "11px 14px", background: "#0a0f0d", border: "1px solid rgba(74,222,128,0.15)", borderRadius: 10, color: "#f0fdf4", fontSize: 13, fontFamily: "inherit", outline: "none" }}
               />
               <button className="action-btn" onClick={() => doAction("ship", { trackingNumber: tracking })} disabled={acting}
