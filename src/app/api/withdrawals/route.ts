@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { notifyAdminWithdrawalRequested } from "@/lib/whatsapp";
 
 export async function GET() {
   try {
@@ -10,11 +11,9 @@ export async function GET() {
 
     const db = getDb();
     let snap;
-
     if (session.role === "admin") {
       snap = await db.collection("withdrawals").get();
     } else {
-      // Single-field where only — no composite index needed
       snap = await db.collection("withdrawals").where("vendor_id", "==", session.id).get();
     }
 
@@ -43,12 +42,10 @@ export async function POST(req: NextRequest) {
 
     const db = getDb();
 
-    // Check for pending withdrawal in memory to avoid compound query index
-    const existingSnap = await db
-      .collection("withdrawals")
+    // Check for pending in memory — no compound query needed
+    const existingSnap = await db.collection("withdrawals")
       .where("vendor_id", "==", session.id)
       .get();
-
     const hasPending = existingSnap.docs.some(d => d.data().status === "pending");
     if (hasPending)
       return NextResponse.json({ error: "You already have a pending withdrawal request" }, { status: 400 });
@@ -68,6 +65,14 @@ export async function POST(req: NextRequest) {
       created_at:   now,
       updated_at:   now,
     });
+
+    // Notify admin on WhatsApp
+    notifyAdminWithdrawalRequested({
+      vendorName: session.name,
+      amount: Number(amount),
+      phone: phone.trim(),
+      network: network.trim(),
+    }).catch(console.error);
 
     return NextResponse.json({ success: true, withdrawalId: id });
   } catch (e: any) {

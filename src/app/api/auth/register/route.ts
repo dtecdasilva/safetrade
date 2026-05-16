@@ -7,7 +7,7 @@ import { createToken, SessionUser } from "@/lib/auth";
 export async function POST(req: NextRequest) {
   try {
     await initDb();
-    const { name, email, password, role } = await req.json();
+    const { name, email, password, role, phone } = await req.json();
 
     if (!name || !email || !password || !role)
       return NextResponse.json({ error: "All fields required" }, { status: 400 });
@@ -15,29 +15,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
 
     const db = getDb();
-    const existing = await db
-      .collection("users")
+    const existing = await db.collection("users")
       .where("email", "==", email.toLowerCase())
       .limit(1)
       .get();
-
     if (!existing.empty)
       return NextResponse.json({ error: "Email already registered" }, { status: 409 });
 
-    const hash = await bcrypt.hash(password, 10);
-    const id = randomUUID();
-    const avatar = name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+    const hash    = await bcrypt.hash(password, 10);
+    const id      = randomUUID();
+    const avatar  = name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+    // Clean phone: strip non-digits, remove leading 237 or 0
+    const cleanPhone = phone
+      ? phone.replace(/\D/g, "").replace(/^237/, "").replace(/^0/, "")
+      : "";
 
     await db.collection("users").doc(id).set({
       id,
-      email: email.toLowerCase(),
+      email:       email.toLowerCase(),
       name,
-      password: hash,
+      password:    hash,
       role,
       avatar,
-      rating: 5.0,
+      phone:       cleanPhone,
+      rating:      5.0,
       trade_count: 0,
-      created_at: new Date().toISOString(),
+      created_at:  new Date().toISOString(),
     });
 
     const user: SessionUser = { id, email: email.toLowerCase(), name, role };

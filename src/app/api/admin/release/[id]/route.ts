@@ -1,8 +1,8 @@
-// ─── api/admin/release/[id]/route.ts ───────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { notifyVendorFundsReleased } from "@/lib/whatsapp";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -25,8 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const eventId = randomUUID();
     await db.collection("trade_events").doc(eventId).set({
-      id: eventId,
-      trade_id: params.id,
+      id: eventId, trade_id: params.id,
       label: "Funds released",
       detail: `FCFA ${trade.amount.toLocaleString()} released to vendor by admin`,
       type: "success",
@@ -39,6 +38,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (vendorDoc.exists) {
       const v = vendorDoc.data()!;
       await vendorRef.update({ trade_count: (v.trade_count || 0) + 1 });
+
+      // Notify vendor on WhatsApp
+      if (v.phone) {
+        notifyVendorFundsReleased({
+          vendorPhone: v.phone,
+          vendorName: trade.vendor_name,
+          title: trade.title,
+          amount: trade.amount,
+        }).catch(console.error);
+      }
     }
 
     return NextResponse.json({ success: true });
@@ -46,27 +55,3 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
-
-
-// ─── api/admin/users/route.ts ───────────────────────────────────────────────
-// (place this content in a separate file)
-/*
-import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
-import { getSession } from "@/lib/auth";
-
-export async function GET() {
-  const session = await getSession();
-  if (!session || session.role !== "admin")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const db = getDb();
-  const snap = await db.collection("users").orderBy("created_at", "desc").get();
-  const users = snap.docs.map(d => {
-    const u = d.data();
-    const { password, ...safe } = u; // never expose hash
-    return safe;
-  });
-  return NextResponse.json({ users });
-}
-*/

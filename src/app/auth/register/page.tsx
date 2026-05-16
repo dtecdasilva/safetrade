@@ -6,7 +6,7 @@ import { inp, btn, card } from "@/lib/styles";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "buyer" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "buyer", phone: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -32,7 +32,7 @@ export default function RegisterPage() {
       <div style={card}>
         <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, background: "linear-gradient(135deg,#22c55e,#15803d)", borderRadius: 12, marginBottom: 12 }}>
-            <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M10 2L3 5.5V10c0 4 3 6.5 7 8 4-1.5 7-4 7-8V5.5L10 2z" fill="white" opacity=".9"/><path d="M7 10l2 2 4-4" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M10 2L3 5.5V10c0 4 3 6.5 7 8 4-1.5 7-4 7-8V5.5L10 2z" fill="white" opacity=".9"/><path d="M7 10l2 2 4-4" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "#f0fdf4", margin: "0 0 4px", letterSpacing: "-0.03em" }}>Create account</h1>
           <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Join SafeTrade — protected escrow trading</p>
@@ -41,16 +41,11 @@ export default function RegisterPage() {
         {/* Role picker */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
           {[
-            { val: "buyer", emoji: "🛒", label: "Buyer", sub: "Pay & receive items" },
+            { val: "buyer",  emoji: "🛒", label: "Buyer",  sub: "Pay & receive items" },
             { val: "vendor", emoji: "📦", label: "Vendor", sub: "Sell & get paid" },
           ].map(r => (
             <button key={r.val} onClick={() => setForm(f => ({ ...f, role: r.val }))} type="button"
-              style={{
-                padding: "12px", borderRadius: 10, cursor: "pointer", textAlign: "left",
-                border: `1px solid ${form.role === r.val ? "#22c55e" : "rgba(74,222,128,0.12)"}`,
-                background: form.role === r.val ? "rgba(34,197,94,0.08)" : "#0a0f0d",
-                transition: "all .15s",
-              }}>
+              style={{ padding: "12px", borderRadius: 10, cursor: "pointer", textAlign: "left", border: `1px solid ${form.role === r.val ? "#22c55e" : "rgba(74,222,128,0.12)"}`, background: form.role === r.val ? "rgba(34,197,94,0.08)" : "#0a0f0d", transition: "all .15s" }}>
               <div style={{ fontSize: 18, marginBottom: 4 }}>{r.emoji}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: form.role === r.val ? "#4ade80" : "#f0fdf4" }}>{r.label}</div>
               <div style={{ fontSize: 11, color: "#6b7280" }}>{r.sub}</div>
@@ -64,10 +59,11 @@ export default function RegisterPage() {
               {error}
             </div>
           )}
+
           {[
-            { key: "name", label: "Full name", type: "text", placeholder: "Jordan Lee" },
-            { key: "email", label: "Email", type: "email", placeholder: "you@example.com" },
-            { key: "password", label: "Password", type: "password", placeholder: "Min. 8 characters" },
+            { key: "name",     label: "Full name",  type: "text",     placeholder: "Jordan Lee" },
+            { key: "email",    label: "Email",       type: "email",    placeholder: "you@example.com" },
+            { key: "password", label: "Password",    type: "password", placeholder: "Min. 8 characters" },
           ].map(f => (
             <div key={f.key}>
               <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>{f.label}</label>
@@ -79,6 +75,33 @@ export default function RegisterPage() {
                 required minLength={f.key === "password" ? 8 : undefined} />
             </div>
           ))}
+
+          {/* WhatsApp phone */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>
+              WhatsApp number <span style={{ color: "#4b5563", fontWeight: 400 }}>(for trade notifications)</span>
+            </label>
+            <div style={{ display: "flex", alignItems: "center", background: "#0a0f0d", border: "1px solid rgba(74,222,128,0.15)", borderRadius: 10, overflow: "hidden" }}
+              onFocus={() => {}} >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 10px", borderRight: "1px solid rgba(74,222,128,0.1)", height: 44, background: "rgba(74,222,128,0.03)", flexShrink: 0 }}>
+                <span style={{ fontSize: 16 }}>🇨🇲</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#4ade80", fontFamily: "monospace" }}>+237</span>
+              </div>
+              <input
+                type="tel"
+                placeholder="6XXXXXXXX"
+                value={form.phone}
+                onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 9) }))}
+                onFocus={e => (e.currentTarget.parentElement!.style.borderColor = "rgba(74,222,128,0.4)")}
+                onBlur={e => (e.currentTarget.parentElement!.style.borderColor = "rgba(74,222,128,0.15)")}
+                style={{ flex: 1, height: 44, padding: "0 12px", background: "transparent", border: "none", outline: "none", color: "#f0fdf4", fontSize: 14, fontFamily: "monospace" }}
+              />
+            </div>
+            <p style={{ fontSize: 11, color: "#4b5563", margin: "4px 0 0 2px" }}>
+              You'll receive trade updates on WhatsApp
+            </p>
+          </div>
+
           <button style={{ ...btn, marginTop: 4, opacity: loading ? 0.7 : 1 }} type="submit" disabled={loading}>
             {loading ? "Creating account..." : `Create ${form.role} account`}
           </button>

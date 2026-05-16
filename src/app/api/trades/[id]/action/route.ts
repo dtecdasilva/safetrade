@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import {
+  notifyVendorPaymentReceived,
+  notifyBuyerItemShipped,
+  notifyVendorDeliveryConfirmed,
+  notifyAdminReleaseNeeded,
+} from "@/lib/whatsapp";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -25,10 +31,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const updateTrade = async (fields: Record<string, any>) => {
       await db.collection("trades").doc(params.id).update({
-        ...fields,
-        updated_at: new Date().toISOString(),
+        ...fields, updated_at: new Date().toISOString(),
       });
     };
+
+    // Fetch buyer and vendor docs for their phone numbers
+    const [buyerDoc, vendorDoc] = await Promise.all([
+      db.collection("users").doc(trade.buyer_id).get(),
+      db.collection("users").doc(trade.vendor_id).get(),
+    ]);
+    const buyer  = buyerDoc.data()  || {};
+    const vendor = vendorDoc.data() || {};
 
     switch (action) {
       case "pay": {
@@ -40,27 +53,57 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         deadline.setDate(deadline.getDate() + (trade.delivery_days || 7));
         await updateTrade({ status: "funds_held", delivery_deadline: deadline.toISOString() });
         await addEvent("Payment confirmed", `FCFA ${trade.amount.toLocaleString()} locked in escrow vault`, "success");
+        // Notify vendor
+        if (vendor.phone) {
+          notifyVendorPaymentReceived({
+            vendorPhone: vendor.phone, vendorName: trade.vendor_name,
+            buyerName: trade.buyer_name, title: trade.title,
+            amount: trade.amount, tradeId: params.id,
+          }).catch(console.error);
+        }
         break;
       }
+
       case "ship": {
         if (session.id !== trade.vendor_id)
           return NextResponse.json({ error: "Only vendor can mark shipped" }, { status: 403 });
         if (trade.status !== "funds_held")
           return NextResponse.json({ error: "Funds not yet locked" }, { status: 400 });
-        const tracking = trackingNumber || "N/A";
-        await updateTrade({ status: "shipped", tracking_number: tracking });
-        await addEvent("Item shipped", `Tracking: ${tracking}`, "info");
+        await updateTrade({ status: "shipped", tracking_number: trackingNumber || "" });
+        await addEvent("Item shipped", "Vendor has shipped the item", "info");
+        // Notify buyer
+        if (buyer.phone) {
+          notifyBuyerItemShipped({
+            buyerPhone: buyer.phone, buyerName: trade.buyer_name,
+            vendorName: trade.vendor_name, title: trade.title,
+            tradeId: params.id,
+          }).catch(console.error);
+        }
         break;
       }
+
       case "confirm": {
         if (session.id !== trade.buyer_id)
           return NextResponse.json({ error: "Only buyer can confirm" }, { status: 403 });
         if (!["shipped", "funds_held"].includes(trade.status))
-          return NextResponse.json({ error: "Cannot confirm delivery at this stage" }, { status: 400 });
+          return NextResponse.json({ error: "Cannot confirm at this stage" }, { status: 400 });
         await updateTrade({ status: "pending_release" });
         await addEvent("Delivery confirmed by buyer", "Awaiting admin approval to release funds", "success");
+        // Notify vendor + admin
+        if (vendor.phone) {
+          notifyVendorDeliveryConfirmed({
+            vendorPhone: vendor.phone, vendorName: trade.vendor_name,
+            buyerName: trade.buyer_name, title: trade.title,
+            amount: trade.amount, tradeId: params.id,
+          }).catch(console.error);
+        }
+        notifyAdminReleaseNeeded({
+          buyerName: trade.buyer_name, vendorName: trade.vendor_name,
+          title: trade.title, amount: trade.amount, tradeId: params.id,
+        }).catch(console.error);
         break;
       }
+
       case "dispute": {
         if (session.id !== trade.buyer_id && session.id !== trade.vendor_id)
           return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -70,6 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         await addEvent("Dispute opened", `${session.name} raised a dispute. SafeTrade referee notified.`, "danger");
         break;
       }
+
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
