@@ -10,9 +10,11 @@ export async function GET() {
 
     const db = getDb();
     let snap;
+
     if (session.role === "admin") {
       snap = await db.collection("withdrawals").get();
     } else {
+      // Single-field where only — no composite index needed
       snap = await db.collection("withdrawals").where("vendor_id", "==", session.id).get();
     }
 
@@ -41,12 +43,14 @@ export async function POST(req: NextRequest) {
 
     const db = getDb();
 
-    // Check there's no pending withdrawal already
-    const pendingSnap = await db.collection("withdrawals")
+    // Check for pending withdrawal in memory to avoid compound query index
+    const existingSnap = await db
+      .collection("withdrawals")
       .where("vendor_id", "==", session.id)
-      .where("status", "==", "pending")
       .get();
-    if (!pendingSnap.empty)
+
+    const hasPending = existingSnap.docs.some(d => d.data().status === "pending");
+    if (hasPending)
       return NextResponse.json({ error: "You already have a pending withdrawal request" }, { status: 400 });
 
     const id  = randomUUID();
