@@ -37,16 +37,33 @@ export async function POST(req: NextRequest) {
     const { amount, phone, network } = await req.json();
     if (!amount || !phone || !network)
       return NextResponse.json({ error: "Amount, phone and network are required" }, { status: 400 });
-    if (Number(amount) < 500)
-      return NextResponse.json({ error: "Minimum withdrawal is FCFA 500" }, { status: 400 });
+
+    const requestedAmount = Number(amount);
+    if (requestedAmount < 1)
+      return NextResponse.json({ error: "Minimum withdrawal is FCFA 1" }, { status: 400 });
 
     const db = getDb();
 
-    // Check for pending in memory — no compound query needed
-    const existingSnap = await db.collection("withdrawals")
-      .where("vendor_id", "==", session.id)
-      .get();
-    const hasPending = existingSnap.docs.some(d => d.data().status === "pending");
+    // Calculate available balance
+    const [tradesSnap, wSnap] = await Promise.all([
+      db.collection("trades").where("vendor_id", "==", session.id).where("status", "==", "complete").get(),
+      db.collection("withdrawals").where("vendor_id", "==", session.id).get(),
+    ]);
+
+    const totalEarned = tradesSnap.docs.reduce((s, d) => s + Number(d.data().amount), 0);
+    const wDocs = wSnap.docs.map(d => d.data());
+    const totalWithdrawn = wDocs
+      .filter(w => w.status === "sent")
+      .reduce((s, w) => s + Number(w.amount), 0);
+    const available = Math.max(0, totalEarned - totalWithdrawn);
+
+    if (available <= 0)
+      return NextResponse.json({ error: "You have no available balance to withdraw" }, { status: 400 });
+    if (requestedAmount > available)
+      return NextResponse.json({ error: `You can only withdraw up to FCFA ${available.toLocaleString()}` }, { status: 400 });
+
+    // Check for existing pending withdrawal
+    const hasPending = wDocs.some(w => w.status === "pending");
     if (hasPending)
       return NextResponse.json({ error: "You already have a pending withdrawal request" }, { status: 400 });
 
@@ -58,7 +75,7 @@ export async function POST(req: NextRequest) {
       vendor_id:    session.id,
       vendor_name:  session.name,
       vendor_email: session.email,
-      amount:       Number(amount),
+      amount:       requestedAmount,
       phone:        phone.trim(),
       network:      network.trim(),
       status:       "pending",
@@ -66,12 +83,12 @@ export async function POST(req: NextRequest) {
       updated_at:   now,
     });
 
-    // Notify admin on WhatsApp
+    // Notify admin
     notifyAdminWithdrawalRequested({
       vendorName: session.name,
-      amount: Number(amount),
-      phone: phone.trim(),
-      network: network.trim(),
+      amount:     requestedAmount,
+      phone:      phone.trim(),
+      network:    network.trim(),
     }).catch(console.error);
 
     return NextResponse.json({ success: true, withdrawalId: id });
