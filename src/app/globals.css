@@ -1,43 +1,73 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600;700&display=swap');
+/* globals.css - SafeTrade minimal design system */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0a0f0d;
-  --bg-card: #111812;
-  --bg-elevated: #162018;
-  --border: rgba(74, 222, 128, 0.12);
-  --border-strong: rgba(74, 222, 128, 0.25);
-  --green: #22c55e;
-  --green-dim: #16a34a;
-  --green-glow: rgba(34, 197, 94, 0.1);
-  --green-text: #4ade80;
-  --amber: #f59e0b;
-  --amber-bg: rgba(245, 158, 11, 0.1);
-  --red: #ef4444;
-  --red-bg: rgba(239, 68, 68, 0.08);
-  --blue: #60a5fa;
-  --blue-bg: rgba(96, 165, 250, 0.1);
-  --text: #f0fdf4;
-  --text-muted: #6b7280;
-  --text-dim: #374151;
-  --font-body: 'Sora', sans-serif;
-  --font-mono: 'DM Mono', monospace;
+  /* Base */
+  --bg:        #0c0c0c;
+  --surface:   #141414;
+  --surface2:  #1a1a1a;
+  --border:    #242424;
+  --border2:   #2e2e2e;
+
+  /* Text */
+  --text:      #f0f0f0;
+  --text-2:    #888;
+  --text-3:    #555;
+
+  /* Accent — a single green, used sparingly */
+  --green:     #22c55e;
+  --green-dim: rgba(34,197,94,0.12);
+
+  /* Status */
+  --amber:     #f59e0b;
+  --blue:      #3b82f6;
+  --purple:    #8b5cf6;
+  --red:       #ef4444;
+  --teal:      #14b8a6;
+
+  /* Radius */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+
+  /* Font */
+  --font:      'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', monospace;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
+html, body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-body);
-  min-height: 100vh;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
+/* Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
-.dashboard-trade-row:hover {
-  background: var(--bg-elevated);
-  border-color: var(--border-strong);
+/* Focus */
+:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+/* Animations */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-up { animation: fade-up 0.2s ease forwards; }
+.animate-fade-in { animation: fade-in 0.15s ease forwards; }

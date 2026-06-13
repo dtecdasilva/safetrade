@@ -2,11 +2,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { inp, btn, card } from "@/lib/styles";
+import { ShieldCheck } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm]   = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -14,61 +14,64 @@ export default function LoginPage() {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      const res  = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
-      const role = data.user.role;
-      router.push(role === "admin" ? "/admin" : "/dashboard");
+      router.push(data.user.role === "admin" ? "/admin" : "/dashboard");
       router.refresh();
     } catch { setError("Something went wrong"); }
     finally { setLoading(false); }
   }
 
+  const inp: React.CSSProperties = {
+    width: "100%", padding: "9px 12px",
+    background: "#141414", border: "1px solid #242424",
+    borderRadius: 8, color: "#f0f0f0", fontSize: 14,
+    fontFamily: "inherit", outline: "none", transition: "border-color 0.15s",
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0f0d", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-      <div style={card}>
-        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, background: "linear-gradient(135deg,#22c55e,#15803d)", borderRadius: 12, marginBottom: 12 }}>
-            <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M10 2L3 5.5V10c0 4 3 6.5 7 8 4-1.5 7-4 7-8V5.5L10 2z" fill="white" opacity=".9"/><path d="M7 10l2 2 4-4" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div style={{ minHeight: "100vh", background: "#0c0c0c", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <style>{`input:focus { border-color: #22c55e !important; } a { color: #22c55e; text-decoration: none; } a:hover { text-decoration: underline; }`}</style>
+
+      <div style={{ width: "100%", maxWidth: 380 }}>
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 32 }}>
+          <div style={{ width: 28, height: 28, background: "#22c55e", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <ShieldCheck size={15} color="#fff" strokeWidth={2.5} />
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#f0fdf4", margin: "0 0 4px", letterSpacing: "-0.03em" }}>Welcome back</h1>
-          <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Sign in to your SafeTrade account</p>
+          <span style={{ fontWeight: 700, fontSize: 16, color: "#f0f0f0", letterSpacing: "-0.02em" }}>SafeTrade</span>
         </div>
 
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: "#f0f0f0", margin: "0 0 6px", letterSpacing: "-0.03em" }}>Sign in</h1>
+        <p style={{ fontSize: 14, color: "#666", margin: "0 0 28px" }}>Welcome back to SafeTrade</p>
+
+        {error && (
+          <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#ef4444", marginBottom: 16 }}>
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {error && (
-            <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#ef4444" }}>
-              {error}
-            </div>
-          )}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Email</label>
+            <label style={{ fontSize: 13, fontWeight: 500, color: "#888", display: "block", marginBottom: 6 }}>Email</label>
             <input style={inp} type="email" placeholder="you@example.com" value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              onFocus={e => (e.target.style.borderColor = "rgba(74,222,128,0.4)")}
-              onBlur={e => (e.target.style.borderColor = "rgba(74,222,128,0.15)")} required />
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
           </div>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Password</label>
+            <label style={{ fontSize: 13, fontWeight: 500, color: "#888", display: "block", marginBottom: 6 }}>Password</label>
             <input style={inp} type="password" placeholder="••••••••" value={form.password}
-              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-              onFocus={e => (e.target.style.borderColor = "rgba(74,222,128,0.4)")}
-              onBlur={e => (e.target.style.borderColor = "rgba(74,222,128,0.15)")} required />
+              onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
           </div>
-          <button style={{ ...btn, opacity: loading ? 0.7 : 1 }} type="submit" disabled={loading}>
+          <button type="submit" disabled={loading}
+            style={{ padding: "10px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: loading ? 0.7 : 1, marginTop: 4 }}>
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
-        <p style={{ textAlign: "center", fontSize: 13, color: "#6b7280", marginTop: 20 }}>
-          No account?{" "}
-          <Link href="/auth/register" style={{ color: "#4ade80", fontWeight: 600, textDecoration: "none" }}>Create one</Link>
+        <p style={{ textAlign: "center", fontSize: 13, color: "#555", marginTop: 20 }}>
+          No account? <Link href="/auth/register">Create one</Link>
         </p>
-        
       </div>
     </div>
   );

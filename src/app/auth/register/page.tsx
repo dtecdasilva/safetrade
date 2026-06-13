@@ -2,11 +2,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { inp, btn, card } from "@/lib/styles";
+import { ShieldCheck } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "buyer", phone: "" });
+  const [form, setForm]   = useState({ name: "", email: "", password: "", role: "buyer", phone: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -14,11 +14,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      const res  = await fetch("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       router.push("/dashboard");
@@ -27,89 +23,88 @@ export default function RegisterPage() {
     finally { setLoading(false); }
   }
 
+  const inp: React.CSSProperties = {
+    width: "100%", padding: "9px 12px",
+    background: "#141414", border: "1px solid #242424",
+    borderRadius: 8, color: "#f0f0f0", fontSize: 14,
+    fontFamily: "inherit", outline: "none", transition: "border-color 0.15s",
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0f0d", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-      <div style={card}>
-        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, background: "linear-gradient(135deg,#22c55e,#15803d)", borderRadius: 12, marginBottom: 12 }}>
-            <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M10 2L3 5.5V10c0 4 3 6.5 7 8 4-1.5 7-4 7-8V5.5L10 2z" fill="white" opacity=".9"/><path d="M7 10l2 2 4-4" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+    <div style={{ minHeight: "100vh", background: "#0c0c0c", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <style>{`input:focus, textarea:focus { border-color: #22c55e !important; } a { color: #22c55e; text-decoration: none; } a:hover { text-decoration: underline; }`}</style>
+
+      <div style={{ width: "100%", maxWidth: 400 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 32 }}>
+          <div style={{ width: 28, height: 28, background: "#22c55e", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <ShieldCheck size={15} color="#fff" strokeWidth={2.5} />
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#f0fdf4", margin: "0 0 4px", letterSpacing: "-0.03em" }}>Create account</h1>
-          <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Join SafeTrade — protected escrow trading</p>
+          <span style={{ fontWeight: 700, fontSize: 16, color: "#f0f0f0", letterSpacing: "-0.02em" }}>SafeTrade</span>
         </div>
 
-        {/* Role picker */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: "#f0f0f0", margin: "0 0 6px", letterSpacing: "-0.03em" }}>Create account</h1>
+        <p style={{ fontSize: 14, color: "#666", margin: "0 0 28px" }}>Secure escrow trading in Cameroon</p>
+
+        {/* Role toggle */}
+        <div style={{ display: "flex", background: "#141414", border: "1px solid #242424", borderRadius: 8, padding: 3, marginBottom: 20 }}>
           {[
-            { val: "buyer",  emoji: "🛒", label: "Buyer",  sub: "Pay & receive items" },
-            { val: "vendor", emoji: "📦", label: "Vendor", sub: "Sell & get paid" },
+            { val: "buyer",  label: "Buyer" },
+            { val: "vendor", label: "Vendor" },
           ].map(r => (
-            <button key={r.val} onClick={() => setForm(f => ({ ...f, role: r.val }))} type="button"
-              style={{ padding: "12px", borderRadius: 10, cursor: "pointer", textAlign: "left", border: `1px solid ${form.role === r.val ? "#22c55e" : "rgba(74,222,128,0.12)"}`, background: form.role === r.val ? "rgba(34,197,94,0.08)" : "#0a0f0d", transition: "all .15s" }}>
-              <div style={{ fontSize: 18, marginBottom: 4 }}>{r.emoji}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: form.role === r.val ? "#4ade80" : "#f0fdf4" }}>{r.label}</div>
-              <div style={{ fontSize: 11, color: "#6b7280" }}>{r.sub}</div>
+            <button key={r.val} type="button" onClick={() => setForm(f => ({ ...f, role: r.val }))}
+              style={{ flex: 1, padding: "7px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit", transition: "all 0.15s", background: form.role === r.val ? "#1e1e1e" : "transparent", color: form.role === r.val ? "#f0f0f0" : "#555", boxShadow: form.role === r.val ? "0 1px 3px rgba(0,0,0,0.4)" : "none" }}>
+              {r.label}
             </button>
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {error && (
-            <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#ef4444" }}>
-              {error}
-            </div>
-          )}
+        {error && (
+          <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#ef4444", marginBottom: 16 }}>
+            {error}
+          </div>
+        )}
 
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {[
             { key: "name",     label: "Full name",  type: "text",     placeholder: "Jordan Lee" },
             { key: "email",    label: "Email",       type: "email",    placeholder: "you@example.com" },
             { key: "password", label: "Password",    type: "password", placeholder: "Min. 8 characters" },
           ].map(f => (
             <div key={f.key}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>{f.label}</label>
+              <label style={{ fontSize: 13, fontWeight: 500, color: "#888", display: "block", marginBottom: 6 }}>{f.label}</label>
               <input style={inp} type={f.type} placeholder={f.placeholder}
                 value={(form as any)[f.key]}
-                onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                onFocus={e => (e.target.style.borderColor = "rgba(74,222,128,0.4)")}
-                onBlur={e => (e.target.style.borderColor = "rgba(74,222,128,0.15)")}
+                onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
                 required minLength={f.key === "password" ? 8 : undefined} />
             </div>
           ))}
 
-          {/* WhatsApp phone */}
+          {/* WhatsApp number */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>
-              WhatsApp number <span style={{ color: "#4b5563", fontWeight: 400 }}>(for trade notifications)</span>
+            <label style={{ fontSize: 13, fontWeight: 500, color: "#888", display: "block", marginBottom: 6 }}>
+              WhatsApp number
+              <span style={{ color: "#444", fontWeight: 400, marginLeft: 6 }}>for trade notifications</span>
             </label>
-            <div style={{ display: "flex", alignItems: "center", background: "#0a0f0d", border: "1px solid rgba(74,222,128,0.15)", borderRadius: 10, overflow: "hidden" }}
-              onFocus={() => {}} >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 10px", borderRight: "1px solid rgba(74,222,128,0.1)", height: 44, background: "rgba(74,222,128,0.03)", flexShrink: 0 }}>
-                <span style={{ fontSize: 16 }}>🇨🇲</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#4ade80", fontFamily: "monospace" }}>+237</span>
-              </div>
-              <input
-                type="tel"
-                placeholder="6XXXXXXXX"
-                value={form.phone}
+            <div style={{ display: "flex", alignItems: "center", background: "#141414", border: "1px solid #242424", borderRadius: 8, overflow: "hidden", transition: "border-color 0.15s" }}>
+              <span style={{ padding: "0 12px", height: 40, display: "flex", alignItems: "center", borderRight: "1px solid #242424", color: "#555", fontSize: 13, fontFamily: "monospace", flexShrink: 0, background: "#1a1a1a" }}>
+                +237
+              </span>
+              <input type="tel" placeholder="6XXXXXXXX" value={form.phone}
                 onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 9) }))}
-                onFocus={e => (e.currentTarget.parentElement!.style.borderColor = "rgba(74,222,128,0.4)")}
-                onBlur={e => (e.currentTarget.parentElement!.style.borderColor = "rgba(74,222,128,0.15)")}
-                style={{ flex: 1, height: 44, padding: "0 12px", background: "transparent", border: "none", outline: "none", color: "#f0fdf4", fontSize: 14, fontFamily: "monospace" }}
-              />
+                onFocus={e => (e.currentTarget.parentElement!.style.borderColor = "#22c55e")}
+                onBlur={e => (e.currentTarget.parentElement!.style.borderColor = "#242424")}
+                style={{ flex: 1, height: 40, padding: "0 12px", background: "transparent", border: "none", outline: "none", color: "#f0f0f0", fontSize: 14, fontFamily: "monospace" }} />
             </div>
-            <p style={{ fontSize: 11, color: "#4b5563", margin: "4px 0 0 2px" }}>
-              You'll receive trade updates on WhatsApp
-            </p>
           </div>
 
-          <button style={{ ...btn, marginTop: 4, opacity: loading ? 0.7 : 1 }} type="submit" disabled={loading}>
+          <button type="submit" disabled={loading}
+            style={{ padding: "10px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: loading ? 0.7 : 1, marginTop: 4 }}>
             {loading ? "Creating account..." : `Create ${form.role} account`}
           </button>
         </form>
 
-        <p style={{ textAlign: "center", fontSize: 13, color: "#6b7280", marginTop: 16 }}>
-          Already have an account?{" "}
-          <Link href="/auth/login" style={{ color: "#4ade80", fontWeight: 600, textDecoration: "none" }}>Sign in</Link>
+        <p style={{ textAlign: "center", fontSize: 13, color: "#555", marginTop: 20 }}>
+          Already have an account? <Link href="/auth/login">Sign in</Link>
         </p>
       </div>
     </div>
