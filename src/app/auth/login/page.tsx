@@ -2,12 +2,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [form, setForm]   = useState({ email: "", password: "" });
-  const [error, setError] = useState("");
+  const [form, setForm]       = useState({ email: "", password: "" });
+  const [showPw, setShowPw]   = useState(false);
+  const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -32,7 +33,12 @@ export default function LoginPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0c0c0c", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-      <style>{`input:focus { border-color: #22c55e !important; } a { color: #22c55e; text-decoration: none; } a:hover { text-decoration: underline; }`}</style>
+      <style>{`
+        input:focus { border-color: #22c55e !important; }
+        a { color: #22c55e; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .eye-btn:hover { color: #f0f0f0 !important; }
+      `}</style>
 
       <div style={{ width: "100%", maxWidth: 380 }}>
         {/* Logo */}
@@ -44,7 +50,7 @@ export default function LoginPage() {
         </div>
 
         <h1 style={{ fontSize: 22, fontWeight: 600, color: "#f0f0f0", margin: "0 0 6px", letterSpacing: "-0.03em" }}>Sign in</h1>
-        <p style={{ fontSize: 14, color: "#666", margin: "0 0 28px" }}>Welcome back to SafeTrade</p>
+        <p style={{ fontSize: 14, color: "#555", margin: "0 0 28px" }}>Welcome back to SafeTrade</p>
 
         {error && (
           <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#ef4444", marginBottom: 16 }}>
@@ -55,14 +61,29 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <label style={{ fontSize: 13, fontWeight: 500, color: "#888", display: "block", marginBottom: 6 }}>Email</label>
-            <input style={inp} type="email" placeholder="you@example.com" value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+            <input style={inp} type="email" placeholder="you@example.com"
+              value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
           </div>
+
           <div>
-            <label style={{ fontSize: 13, fontWeight: 500, color: "#888", display: "block", marginBottom: 6 }}>Password</label>
-            <input style={inp} type="password" placeholder="••••••••" value={form.password}
-              onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: "#888" }}>Password</label>
+              <Link href="/auth/forgot-password" style={{ fontSize: 12, color: "#555" }}>Forgot password?</Link>
+            </div>
+            <div style={{ position: "relative" }}>
+              <input style={{ ...inp, paddingRight: 40 }}
+                type={showPw ? "text" : "password"}
+                placeholder="••••••••"
+                value={form.password}
+                onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
+              <button type="button" className="eye-btn"
+                onClick={() => setShowPw(s => !s)}
+                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#444", display: "flex", alignItems: "center", padding: 2, transition: "color 0.15s" }}>
+                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
           </div>
+
           <button type="submit" disabled={loading}
             style={{ padding: "10px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: loading ? 0.7 : 1, marginTop: 4 }}>
             {loading ? "Signing in..." : "Sign in"}
