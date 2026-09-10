@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { chargeMobileMoney } from "@/lib/tranzak";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -22,60 +23,35 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!phoneNumber?.trim())
       return NextResponse.json({ error: "Phone number is required" }, { status: 400 });
 
-    const monetbilServiceKey = process.env.MONETBIL_SERVICE_KEY;
-    if (!monetbilServiceKey) {
-      console.error("[pay] MONETBIL_SERVICE_KEY is not set");
-      return NextResponse.json({ error: "Payment service not configured" }, { status: 500 });
-    }
-
-    const appUrl = "https://safetrade-ruddy.vercel.app";
-
-    // Buyer pays buyer_total (item + fee), not just amount
+    // Buyer pays buyer_total (item price + fee)
     const chargeAmount = trade.buyer_total || trade.amount;
 
-    const payload = {
-      amount:     chargeAmount,
-      currency:   "XAF",
-      country:    "CM",
-      locale:     "en",
-      phone:      `237${phoneNumber.trim()}`,
-      phone_lock: false,
-      item_ref:   params.id,
-      payment_ref: params.id,
-      notify_url: `${appUrl}/api/trades/${params.id}/monetbil-webhook`,
-      return_url: `${appUrl}/trade/${params.id}`,
-    };
+    // Format phone with country code
+    const phone = `237${phoneNumber.trim().replace(/^237/, "")}`;
 
-    console.log("[pay] payload:", JSON.stringify(payload));
+    const result = await chargeMobileMoney({
+      ref:         params.id,
+      amount:      chargeAmount,
+      phone,
+      description: `SafeTrade: ${trade.title}`,
+    });
 
-    const response = await fetch(
-      `https://api.monetbil.com/widget/v2.1/${monetbilServiceKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
+    if (!result.success)
+      return NextResponse.json({ error: result.error || "Payment initiation failed" }, { status: 500 });
 
-    const responseText = await response.text();
-    console.log("[pay] Monetbil status:", response.status);
-    console.log("[pay] Monetbil response:", responseText);
+    // Store Tranzak transaction ref
+    const txRef = result.tx?.data?.requestId || result.tx?.data?.mchTransactionRef || params.id;
+    await db.collection("trades").doc(params.id).update({
+      tranzak_ref: txRef,
+      updated_at:  new Date().toISOString(),
+    });
 
-    if (!response.ok)
-      return NextResponse.json({ error: "Payment service unavailable", details: responseText }, { status: 500 });
-
-    let data: any;
-    try { data = JSON.parse(responseText); }
-    catch (err: any) {
-      return NextResponse.json({ error: "Invalid payment response", details: responseText }, { status: 502 });
-    }
-
-    const paymentId = data.paymentId || data.payment_id || data.transaction_id || data.id;
-    if (paymentId) {
-      await db.collection("trades").doc(params.id).update({ monetbil_transaction_id: paymentId });
-    }
-
-    return NextResponse.json({ ...data, ...(paymentId ? { paymentId } : {}) });
+    return NextResponse.json({
+      success: true,
+      message: "A payment prompt has been sent to your phone. Please approve it to complete the transaction.",
+      ref:     txRef,
+      status:  result.tx?.data?.status,
+    });
   } catch (e: any) {
     console.error("[pay] error:", e.message);
     return NextResponse.json({ error: e.message }, { status: 500 });
