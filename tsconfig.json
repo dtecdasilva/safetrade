@@ -24,7 +24,8 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ]
+      ],
+      "tranzak-node": ["./node_modules/tranzak-node/index.d.ts"]
     }
   },
   "include": [
