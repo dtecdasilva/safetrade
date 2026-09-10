@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-const [paymentSent, setPaymentSent] = useState(false);
 import { ArrowLeft, CheckCircle, AlertTriangle, Truck, ShieldCheck, RefreshCw, Edit3, Trash2, X, Save } from "lucide-react";
 
 const STATUS: Record<string, { label: string; color: string; step: number }> = {
@@ -23,6 +22,7 @@ const NETWORKS = [
   { id: "orange", label: "Orange Money", color: "#f97316" },
 ];
 
+
 export default function TradePage() {
   const router = useRouter();
   const { id } = useParams() as { id: string };
@@ -34,9 +34,9 @@ export default function TradePage() {
   const [acting, setActing]   = useState(false);
   const [error, setError]     = useState("");
 
-  // Pay
   const [phone, setPhone]     = useState("");
   const [network, setNetwork] = useState<"mtn"|"orange"|"">("");
+  const [paymentSent, setPaymentSent] = useState(false);
 
   // Notify
   const [notified, setNotified] = useState(false);
