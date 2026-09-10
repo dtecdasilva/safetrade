@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+const [paymentSent, setPaymentSent] = useState(false);
 import { ArrowLeft, CheckCircle, AlertTriangle, Truck, ShieldCheck, RefreshCw, Edit3, Trash2, X, Save } from "lucide-react";
 
 const STATUS: Record<string, { label: string; color: string; step: number }> = {
@@ -74,17 +75,36 @@ export default function TradePage() {
   }
 
   async function pay() {
-    if (!phone.trim()) { setError("Enter your phone number"); return; }
-    if (!network)      { setError("Select a network"); return; }
-    setActing(true); setError("");
-    try {
-      const res  = await fetch(`/api/trades/${id}/pay`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phoneNumber: phone, network }) });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || "Payment failed"); setActing(false); return; }
-      const url  = data.payment_url || data.url || data.paymentUrl;
-      if (url) window.location.href = url;
-      else { await load(); setActing(false); }
-    } catch { setError("Something went wrong"); setActing(false); }
+     if (!phone.trim()) { setError("Enter your phone number"); return; }
+  if (!network)      { setError("Select a network"); return; }
+  setActing(true); setError("");
+  try {
+    const res  = await fetch(`/api/trades/${id}/pay`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phoneNumber: phone, network }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setError(data.error || "Payment failed"); setActing(false); return; }
+
+    // Tranzak sends USSD push — no redirect needed
+    // Show waiting state and poll for status
+    setPaymentSent(true);
+    setActing(false);
+
+    // Poll trade status every 5 seconds for up to 3 minutes
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      const r = await fetch(`/api/trades/${id}`);
+      const d = await r.json();
+      if (d.trade?.status !== "pending_payment") {
+        clearInterval(poll);
+        await load();
+      }
+      if (attempts >= 36) clearInterval(poll); // stop after 3 mins
+    }, 5000);
+  } catch { setError("Something went wrong"); setActing(false); }
   }
 
   async function notify() {
@@ -304,41 +324,60 @@ export default function TradePage() {
 
         {/* Buyer: pay */}
         {isBuyer && trade.status === "pending_payment" && (
-          <div className="fade-up" style={sec}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", margin: "0 0 4px" }}>Complete payment</p>
-            <p style={{ fontSize: 13, color: "#555", margin: "0 0 16px" }}>
-              Total to pay: <strong style={{ color: "#f0f0f0", fontFamily: "monospace" }}>FCFA {Number(trade.buyer_total || trade.amount).toLocaleString()}</strong>
-            </p>
+  <div style={sec}>
+    {!paymentSent ? (
+      <>
+        <p style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", margin: "0 0 4px" }}>Complete payment</p>
+        <p style={{ fontSize: 13, color: "#555", margin: "0 0 16px" }}>
+          Total: <strong style={{ color: "#f0f0f0", fontFamily: "monospace" }}>FCFA {Number(trade.buyer_total || trade.amount).toLocaleString()}</strong>
+        </p>
 
-            <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 6, fontWeight: 500 }}>Select network</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-              {NETWORKS.map(n => (
-                <button key={n.id} onClick={() => setNetwork(n.id as "mtn"|"orange")}
-                  style={{ padding: "10px", borderRadius: 8, border: `1.5px solid ${network === n.id ? n.color : "#242424"}`, background: network === n.id ? `${n.color}10` : "#0c0c0c", color: network === n.id ? n.color : "#555", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
-                  {n.label}
-                </button>
-              ))}
-            </div>
-
-            <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 6, fontWeight: 500 }}>
-              {network ? (network === "mtn" ? "MTN" : "Orange") : "Mobile money"} number
-            </label>
-            <div style={{ display: "flex", background: "#0c0c0c", border: `1px solid ${selNet ? selNet.color + "50" : "#242424"}`, borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
-              <span style={{ padding: "0 12px", display: "flex", alignItems: "center", borderRight: `1px solid ${selNet ? selNet.color + "30" : "#242424"}`, color: "#444", fontSize: 12, fontFamily: "monospace", background: "#141414", flexShrink: 0 }}>+237</span>
-              <input type="tel" placeholder="6XXXXXXXX" value={phone}
-                onChange={e => setPhone(e.target.value.replace(/\D/g,"").slice(0,9))}
-                style={{ flex: 1, height: 40, padding: "0 12px", background: "transparent", border: "none", outline: "none", color: "#f0f0f0", fontSize: 14, fontFamily: "monospace" }} />
-            </div>
-
-            <button onClick={pay} disabled={!canPay || acting}
-              style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: canPay ? (selNet?.color || "#22c55e") : "#1a1a1a", color: canPay ? "#fff" : "#444", fontSize: 14, fontWeight: 600, cursor: canPay ? "pointer" : "not-allowed", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: acting ? 0.7 : 1 }}>
-              {acting
-                ? <><div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /> Redirecting...</>
-                : <><ShieldCheck size={14} /> {!network ? "Select a network" : `Pay via ${selNet?.label}`}</>
-              }
+        <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 6, fontWeight: 500 }}>Select network</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+          {NETWORKS.map(n => (
+            <button key={n.id} onClick={() => setNetwork(n.id as "mtn"|"orange")}
+              style={{ padding: "10px", borderRadius: 8, border: `1.5px solid ${network === n.id ? n.color : "#242424"}`, background: network === n.id ? `${n.color}10` : "#0c0c0c", color: network === n.id ? n.color : "#555", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+              {n.label}
             </button>
-          </div>
-        )}
+          ))}
+        </div>
+
+        <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 6, fontWeight: 500 }}>
+          {network ? (network === "mtn" ? "MTN" : "Orange") : "Mobile money"} number
+        </label>
+        <div style={{ display: "flex", background: "#0c0c0c", border: `1px solid ${selNet ? selNet.color + "50" : "#242424"}`, borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
+          <span style={{ padding: "0 12px", display: "flex", alignItems: "center", borderRight: `1px solid ${selNet ? selNet.color + "30" : "#242424"}`, color: "#444", fontSize: 12, fontFamily: "monospace", background: "#141414", flexShrink: 0 }}>+237</span>
+          <input type="tel" placeholder="6XXXXXXXX" value={phone}
+            onChange={e => setPhone(e.target.value.replace(/\D/g,"").slice(0,9))}
+            style={{ flex: 1, height: 40, padding: "0 12px", background: "transparent", border: "none", outline: "none", color: "#f0f0f0", fontSize: 14, fontFamily: "monospace" }} />
+        </div>
+
+        <button onClick={pay} disabled={!canPay || acting}
+          style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: canPay ? (selNet?.color || "#22c55e") : "#1a1a1a", color: canPay ? "#fff" : "#444", fontSize: 14, fontWeight: 600, cursor: canPay ? "pointer" : "not-allowed", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: acting ? 0.7 : 1 }}>
+          {acting
+            ? <><div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /> Sending prompt...</>
+            : <><ShieldCheck size={14} /> {!network ? "Select a network" : `Pay via ${selNet?.label}`}</>
+          }
+        </button>
+      </>
+    ) : (
+      // Waiting for USSD approval
+      <div style={{ textAlign: "center", padding: "8px 0" }}>
+        <div style={{ width: 40, height: 40, border: "2px solid #1e1e1e", borderTop: "2px solid #22c55e", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
+        <p style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", margin: "0 0 6px" }}>Approve the payment on your phone</p>
+        <p style={{ fontSize: 13, color: "#555", margin: "0 0 16px" }}>
+          A USSD prompt has been sent to <strong style={{ color: "#f0f0f0", fontFamily: "monospace" }}>+237{phone}</strong>.<br />
+          Approve it to complete payment.
+        </p>
+        <p style={{ fontSize: 12, color: "#444", margin: "0 0 14px" }}>This page will update automatically once payment is confirmed.</p>
+        <button onClick={() => { setPaymentSent(false); setPhone(""); setNetwork(""); }}
+          style={{ fontSize: 12, color: "#555", background: "none", border: "1px solid #242424", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontFamily: "inherit" }}>
+          Use a different number
+        </button>
+      </div>
+    )}
+  </div>
+)}
 
         {/* Buyer: confirm/dispute */}
         {isBuyer && ["shipped","funds_held"].includes(trade.status) && (
