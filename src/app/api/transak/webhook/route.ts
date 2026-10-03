@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { getTranzak } from "@/lib/tranzak";
 import { notifyVendorPaymentReceived } from "@/lib/whatsapp";
+import { notifyTradeMove } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
         id:         eventId,
         trade_id:   tradeId,
         label:      "Payment confirmed",
-        detail:     `FCFA ${Number(trade.buyer_total || trade.amount).toLocaleString()} received and locked in escrow`,
+        detail:     `FCFA ${Number(trade.buyer_total || trade.amount).toLocaleString()} received and safely held by Zola`,
         type:       "success",
         created_at: new Date().toISOString(),
       });
@@ -75,6 +76,8 @@ export async function POST(req: NextRequest) {
           tradeId,
         }).catch(console.error);
       }
+
+      await notifyTradeMove("paid", { ...(trade as any), id: tradeId });
 
       console.log("[tranzak/webhook] trade updated to funds_held:", tradeId);
     });
@@ -106,6 +109,8 @@ export async function POST(req: NextRequest) {
         type:       "warn",
         created_at: new Date().toISOString(),
       });
+
+      await notifyTradeMove("payment_failed", { ...(trade as any), id: tradeId });
 
       console.log("[tranzak/webhook] payment cancelled for trade:", tradeId);
     });

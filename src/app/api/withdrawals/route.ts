@@ -3,11 +3,12 @@ import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { notifyAdminWithdrawalRequested } from "@/lib/whatsapp";
+import { notifyWithdrawalRequested } from "@/lib/notifications";
 
 export async function GET() {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
 
     const db = getDb();
     let snap;
@@ -30,13 +31,13 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
     if (session.role !== "vendor")
-      return NextResponse.json({ error: "Only vendors can withdraw" }, { status: 403 });
+      return NextResponse.json({ error: "Only seller accounts can withdraw" }, { status: 403 });
 
     const { amount, phone, network } = await req.json();
     if (!amount || !phone || !network)
-      return NextResponse.json({ error: "Amount, phone and network are required" }, { status: 400 });
+      return NextResponse.json({ error: "Enter an amount, a mobile money number and a network" }, { status: 400 });
 
     const requestedAmount = Number(amount);
     if (requestedAmount < 1)
@@ -58,14 +59,14 @@ export async function POST(req: NextRequest) {
     const available = Math.max(0, totalEarned - totalWithdrawn);
 
     if (available <= 0)
-      return NextResponse.json({ error: "You have no available balance to withdraw" }, { status: 400 });
+      return NextResponse.json({ error: "You don't have any funds available to withdraw yet" }, { status: 400 });
     if (requestedAmount > available)
       return NextResponse.json({ error: `You can only withdraw up to FCFA ${available.toLocaleString()}` }, { status: 400 });
 
     // Check for existing pending withdrawal
     const hasPending = wDocs.some(w => w.status === "pending");
     if (hasPending)
-      return NextResponse.json({ error: "You already have a pending withdrawal request" }, { status: 400 });
+      return NextResponse.json({ error: "You already have a withdrawal in progress" }, { status: 400 });
 
     const id  = randomUUID();
     const now = new Date().toISOString();
@@ -81,6 +82,11 @@ export async function POST(req: NextRequest) {
       status:       "pending",
       created_at:   now,
       updated_at:   now,
+    });
+
+    await notifyWithdrawalRequested({
+      vendor_name: session.name, amount: requestedAmount,
+      phone: phone.trim(), network: network.trim(),
     });
 
     // Notify admin

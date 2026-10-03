@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
+import { notifyTradeMove } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   try {
@@ -62,10 +63,12 @@ export async function POST(req: NextRequest) {
       id: eventId,
       trade_id: tradeDoc.id,
       label: "Payment confirmed",
-      detail: `FCFA ${Number(trade.amount).toLocaleString()} locked in escrow vault${phone ? ` (paid from ${phone})` : ""}`,
+      detail: `FCFA ${Number(trade.amount).toLocaleString()} safely held by Zola${phone ? ` (paid from ${phone})` : ""}`,
       type: "success",
       created_at: new Date().toISOString(),
     });
+
+    await notifyTradeMove("paid", { ...(trade as any), id: tradeDoc.id });
 
     console.log("[monetbil/notify] ✓ trade updated to funds_held:", tradeDoc.id);
     return NextResponse.json({ ok: true });

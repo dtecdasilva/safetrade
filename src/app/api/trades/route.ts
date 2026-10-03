@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb, initDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { sendEmail } from "@/lib/mail";
+import { sendEmail, emailLayout } from "@/lib/mail";
+import { notifyTradeMove } from "@/lib/notifications";
 import {
   notifyBuyerTradeCreated,
   notifyAdminTradeCreated,
@@ -16,7 +17,7 @@ export async function GET() {
   try {
     await initDb();
     const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
 
     const db = getDb();
     let snap;
@@ -39,13 +40,13 @@ export async function POST(req: NextRequest) {
   try {
     await initDb();
     const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
     if (session.role !== "vendor")
-      return NextResponse.json({ error: "Only vendors can create trades" }, { status: 403 });
+      return NextResponse.json({ error: "Only seller accounts can create transactions" }, { status: 403 });
 
     const { title, description, amount, buyerPhone, deliveryDays } = await req.json();
     if (!title || !description || !amount || !buyerPhone)
-      return NextResponse.json({ error: "All fields required" }, { status: 400 });
+      return NextResponse.json({ error: "Please fill in the item, description, price and the buyer's phone number" }, { status: 400 });
 
     // Clean phone — strip +237 prefix and non-digits
     const cleanPhone = buyerPhone.replace(/\D/g, "").replace(/^237/, "");
@@ -59,11 +60,11 @@ export async function POST(req: NextRequest) {
       .get();
 
     if (buyerSnap.empty)
-      return NextResponse.json({ error: "No buyer found with that phone number" }, { status: 404 });
+      return NextResponse.json({ error: "We couldn't find a Zola account with that phone number. Ask the buyer to create one first." }, { status: 404 });
 
     const buyer = buyerSnap.docs[0].data();
     if (buyer.role !== "buyer")
-      return NextResponse.json({ error: "That number doesn't belong to a buyer account" }, { status: 400 });
+      return NextResponse.json({ error: "That number isn't registered to a buyer account" }, { status: 400 });
 
     // Fee added on top — buyer pays item price + fee, vendor receives full item price
     const fee        = parseFloat((Number(amount) * 0.015).toFixed(2));
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
     await db.collection("trades").doc(id).set({
       id, title, description,
       amount:      Number(amount),  // vendor receives this in full
-      fee,                           // SafeTrade fee paid by buyer
+      fee,                           // Zola fee paid by buyer
       buyer_total: buyerTotal,       // total buyer pays
       status:            "pending_payment",
       delivery_days:     deliveryDays || 7,
@@ -101,12 +102,19 @@ export async function POST(req: NextRequest) {
     const eventId = randomUUID();
     await db.collection("trade_events").doc(eventId).set({
       id: eventId, trade_id: id,
-      label:  "Trade created",
-      detail: `${session.name} created the trade for ${buyer.name}`,
+      label:  "Transaction created",
+      detail: `${session.name} created this transaction for ${buyer.name}`,
       type:   "info", created_at: now,
     });
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://safetrade-ruddy.vercel.app";
+
+    // In-app notifications for the buyer and the admin
+    await notifyTradeMove("created", {
+      id, title, amount: Number(amount), buyer_total: buyerTotal,
+      buyer_id: buyer.id, buyer_name: buyer.name,
+      vendor_id: session.id, vendor_name: vendor.name,
+    });
 
     // WhatsApp notifications (fire and forget)
     if (buyer.phone) {
@@ -124,9 +132,20 @@ export async function POST(req: NextRequest) {
     // Email fallback
     const emailResult = await sendEmail({
       to: buyer.email,
-      subject: `SafeTrade: New transaction created by ${session.name}`,
-      text: `Hi ${buyer.name},\n\n${session.name} created a new trade for you.\n\nTitle: ${title}\nItem price: FCFA ${Number(amount).toLocaleString()}\nSafeTrade fee (1.5%): FCFA ${fee.toLocaleString()}\nTotal to pay: FCFA ${buyerTotal.toLocaleString()}\n\nVisit: ${appUrl}/trade/${id}\n\nThanks,\nSafeTrade`,
-      html: `<p>Hi ${buyer.name},</p><p><strong>${session.name}</strong> created a new trade for you on SafeTrade.</p><ul><li><strong>Title</strong>: ${title}</li><li><strong>Item price</strong>: FCFA ${Number(amount).toLocaleString()}</li><li><strong>SafeTrade fee (1.5%)</strong>: FCFA ${fee.toLocaleString()}</li><li><strong>Total to pay</strong>: FCFA ${buyerTotal.toLocaleString()}</li></ul><p><a href="${appUrl}/trade/${id}">Click here to review and pay</a>.</p><p>Thanks,<br/>SafeTrade</p>`,
+      subject: `Zola: ${session.name} created a transaction for you`,
+      text: `Hi ${buyer.name},\n\n${session.name} created a transaction for you on Zola.\n\nItem: ${title}\nItem price: FCFA ${Number(amount).toLocaleString()}\nZola fee (1.5%): FCFA ${fee.toLocaleString()}\nTotal to pay: FCFA ${buyerTotal.toLocaleString()}\n\nReview and pay securely: ${appUrl}/trade/${id}\n\nYou pay Zola, not the seller. We hold your payment until you confirm delivery.\n\nZola\nSecure transactions. Simple payments.`,
+      html: emailLayout({
+        heading: `${session.name} created a transaction for you`,
+        intro: `Hi ${buyer.name}, review the details below and pay securely when you're ready.`,
+        rows: [
+          ["Item", title],
+          ["Item price", `FCFA ${Number(amount).toLocaleString()}`],
+          ["Zola fee (1.5%)", `FCFA ${fee.toLocaleString()}`],
+        ],
+        totalRow: ["Total to pay", `FCFA ${buyerTotal.toLocaleString()}`],
+        cta: { label: "Review and pay securely", url: `${appUrl}/trade/${id}` },
+        note: "You pay Zola, not the seller. We hold your payment until you confirm delivery.",
+      }),
     });
 
     const eventId2 = randomUUID();

@@ -4,24 +4,35 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { ArrowLeft, CheckCircle, AlertTriangle, Truck, ShieldCheck, RefreshCw, Edit3, Trash2, X, Save } from "lucide-react";
+import { MoneyRail, PageLoader, PhoneField, StatusPill, Steps, Timeline } from "@/components/ui";
+import { fmtDate, initials, money, shortId, statusMeta, statusStory, ViewerRole } from "@/lib/zola";
 
-const STATUS: Record<string, { label: string; color: string; step: number }> = {
-  pending_payment: { label: "Awaiting payment",  color: "#f59e0b", step: 1 },
-  funds_held:      { label: "Funds held",        color: "#3b82f6", step: 2 },
-  shipped:         { label: "Shipped",            color: "#8b5cf6", step: 3 },
-  pending_release: { label: "Pending release",    color: "#f59e0b", step: 4 },
-  complete:        { label: "Complete",           color: "#22c55e", step: 5 },
-  disputed:        { label: "Disputed",           color: "#ef4444", step: 0 },
-  cancelled:       { label: "Cancelled",          color: "#555",    step: 0 },
-};
-
-const EV_COLOR: Record<string, string> = { success: "#22c55e", info: "#3b82f6", warn: "#f59e0b", danger: "#ef4444" };
-const STEPS = ["Payment", "Escrow", "Shipped", "Release", "Done"];
 const NETWORKS = [
-  { id: "mtn",    label: "MTN MoMo",     color: "#f59e0b" },
-  { id: "orange", label: "Orange Money", color: "#f97316" },
+  { id: "mtn",    label: "MTN MoMo" },
+  { id: "orange", label: "Orange Money" },
 ];
 
+const DELIVERY_STATUS: Record<string, string> = {
+  pending_payment: "Starts once the buyer pays",
+  funds_held:      "Not shipped yet",
+  shipped:         "Shipped, waiting for the buyer to confirm",
+  delivered:       "Delivery confirmed",
+  pending_release: "Delivery confirmed",
+  complete:        "Delivery confirmed",
+  disputed:        "On hold while Zola reviews",
+  cancelled:       "Cancelled",
+};
+
+const PAYOUT_STATUS: Record<string, string> = {
+  pending_payment: "Waiting for the buyer's payment",
+  funds_held:      "Held by Zola until delivery is confirmed",
+  shipped:         "Held by Zola until delivery is confirmed",
+  delivered:       "Being released",
+  pending_release: "Being released",
+  complete:        "Released to your wallet",
+  disputed:        "On hold while Zola reviews",
+  cancelled:       "Cancelled",
+};
 
 export default function TradePage() {
   const router = useRouter();
@@ -63,6 +74,13 @@ export default function TradePage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // When a notification arrives (the other side paid, shipped, confirmed...), show the new status straight away
+  useEffect(() => {
+    const onMove = () => { load(); };
+    window.addEventListener("zola:notification", onMove);
+    return () => window.removeEventListener("zola:notification", onMove);
+  }, [load]);
+
   async function act(action: string, extra: Record<string,any> = {}) {
     setActing(true); setError("");
     try {
@@ -70,41 +88,41 @@ export default function TradePage() {
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       await load();
-    } catch { setError("Something went wrong"); }
+    } catch { setError("Something went wrong. Check your connection and try again."); }
     finally { setActing(false); }
   }
 
   async function pay() {
-     if (!phone.trim()) { setError("Enter your phone number"); return; }
-  if (!network)      { setError("Select a network"); return; }
-  setActing(true); setError("");
-  try {
-    const res  = await fetch(`/api/trades/${id}/pay`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phoneNumber: phone, network }),
-    });
-    const data = await res.json();
-    if (!res.ok) { setError(data.error || "Payment failed"); setActing(false); return; }
+    if (!phone.trim()) { setError("Enter your mobile money number"); return; }
+    if (!network)      { setError("Choose a network"); return; }
+    setActing(true); setError("");
+    try {
+      const res  = await fetch(`/api/trades/${id}/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneNumber: phone, network }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "The payment could not be started. Please try again."); setActing(false); return; }
 
-    // Tranzak sends USSD push — no redirect needed
-    // Show waiting state and poll for status
-    setPaymentSent(true);
-    setActing(false);
+      // Fapshi sends a mobile money push — no redirect needed
+      // Show waiting state and poll for status
+      setPaymentSent(true);
+      setActing(false);
 
-    // Poll trade status every 5 seconds for up to 3 minutes
-    let attempts = 0;
-    const poll = setInterval(async () => {
-      attempts++;
-      const r = await fetch(`/api/trades/${id}`);
-      const d = await r.json();
-      if (d.trade?.status !== "pending_payment") {
-        clearInterval(poll);
-        await load();
-      }
-      if (attempts >= 36) clearInterval(poll); // stop after 3 mins
-    }, 5000);
-  } catch { setError("Something went wrong"); setActing(false); }
+      // Poll trade status every 5 seconds for up to 3 minutes
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        const r = await fetch(`/api/trades/${id}`);
+        const d = await r.json();
+        if (d.trade?.status !== "pending_payment") {
+          clearInterval(poll);
+          await load();
+        }
+        if (attempts >= 36) clearInterval(poll); // stop after 3 mins
+      }, 5000);
+    } catch { setError("Something went wrong. Check your connection and try again."); setActing(false); }
   }
 
   async function notify() {
@@ -119,7 +137,7 @@ export default function TradePage() {
       const data = await res.json();
       if (!res.ok) { setEditErr(data.error); return; }
       setEditing(false); await load();
-    } catch { setEditErr("Something went wrong"); }
+    } catch { setEditErr("Something went wrong. Check your connection and try again."); }
     finally { setEditSaving(false); }
   }
 
@@ -130,14 +148,9 @@ export default function TradePage() {
     else { const d = await res.json(); setError(d.error); setDelConfirm(false); setDeleting(false); }
   }
 
-  if (loading || !trade) return (
-    <div style={{ minHeight: "100vh", background: "#0c0c0c", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: 24, height: 24, border: "2px solid #1e1e1e", borderTop: "2px solid #22c55e", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
+  if (loading || !trade) return <PageLoader />;
 
-  const s       = STATUS[trade.status] || STATUS.cancelled;
+  const s        = statusMeta(trade.status);
   const isAdmin  = user?.role === "admin";
   const isBuyer  = user?.id === trade.buyer_id;
   const isVendor = user?.id === trade.vendor_id;
@@ -147,134 +160,210 @@ export default function TradePage() {
   const canPay   = phone.length >= 8 && !!network;
   const editFee  = Number(editForm.amount) ? parseFloat((Number(editForm.amount) * 0.015).toFixed(2)) : 0;
 
-  const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", background: "#0c0c0c", border: "1px solid #242424", borderRadius: 8, color: "#f0f0f0", fontSize: 13, fontFamily: "inherit", outline: "none", transition: "border-color 0.15s", boxSizing: "border-box" as const };
-  const sec: React.CSSProperties = { background: "#141414", border: "1px solid #1e1e1e", borderRadius: 10, padding: "16px", marginBottom: 10 };
+  const viewer: ViewerRole = isBuyer ? "buyer" : isVendor ? "seller" : "admin";
+  const story   = statusStory(trade, viewer);
+  const total   = Number(trade.buyer_total || trade.amount);
+  const hasPaid = !["pending_payment", "cancelled"].includes(trade.status);
+  const isHeld  = s.money === "zola";
+
+  /* ── The one thing this person can do right now ── */
+  let action: React.ReactNode = null;
+
+  if (isBuyer && trade.status === "pending_payment") {
+    action = !paymentSent ? (
+      <section className="card card-pad tx-action" aria-labelledby="pay-title">
+        <h2 id="pay-title" className="section-title">Pay securely</h2>
+        <p className="hint" style={{ margin: "2px 0 18px" }}>
+          You pay Zola, not the seller. We hold your payment until you confirm delivery.
+        </p>
+
+        <div className="kv" style={{ padding: "12px 14px", background: "var(--bg)", borderRadius: "var(--r-md)", marginBottom: 18 }}>
+          <span>Total to pay</span>
+          <span style={{ fontSize: 18, fontWeight: 800 }}>{money(total)}</span>
+        </div>
+
+        <div className="field" style={{ marginBottom: 14 }}>
+          <span className="label">Network</span>
+          <div className="choice-row">
+            {NETWORKS.map(n => (
+              <button key={n.id} type="button" className="choice" aria-pressed={network === n.id}
+                onClick={() => setNetwork(n.id as "mtn"|"orange")}>
+                {n.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field" style={{ marginBottom: 18 }}>
+          <label className="label" htmlFor="pay-phone">
+            {network ? (network === "mtn" ? "MTN" : "Orange") : "Mobile money"} number
+          </label>
+          <PhoneField id="pay-phone" value={phone} onChange={setPhone} />
+        </div>
+
+        <button onClick={pay} disabled={!canPay || acting} className="btn btn-primary btn-lg btn-block" style={{ whiteSpace: "normal", lineHeight: 1.25, padding: "10px 16px" }}>
+          {acting
+            ? <><span className="spinner spinner-sm spinner-on-color" /> Sending prompt to your phone...</>
+            : <><ShieldCheck size={18} style={{ flexShrink: 0 }} /> {!network ? "Choose a network to pay" : `Pay ${money(total)} with ${selNet?.label}`}</>
+          }
+        </button>
+      </section>
+    ) : (
+      // Waiting for the buyer to approve the prompt on their phone
+      <section className="card card-pad tx-action" style={{ textAlign: "center" }} role="status">
+        <span className="spinner" style={{ width: 36, height: 36, marginBottom: 14 }} />
+        <h2 className="section-title">Approve the payment on your phone</h2>
+        <p style={{ fontSize: 14.5, margin: "6px auto 0", maxWidth: "40ch" }}>
+          We&apos;ve sent a payment prompt to <strong className="num" style={{ color: "var(--navy)" }}>+237{phone}</strong>. Approve it to finish paying.
+        </p>
+        <p className="hint" style={{ margin: "10px 0 16px" }}>This page updates automatically once your payment is confirmed.</p>
+        <button onClick={() => { setPaymentSent(false); setPhone(""); setNetwork(""); }} className="btn btn-secondary btn-sm">
+          Use a different number
+        </button>
+      </section>
+    );
+  } else if (isBuyer && ["shipped","funds_held"].includes(trade.status)) {
+    action = (
+      <section className="card card-pad tx-action fade-up" aria-labelledby="confirm-title">
+        <h2 id="confirm-title" className="section-title">
+          {trade.status === "shipped" ? "Has your order arrived?" : "Already have your order?"}
+        </h2>
+        <p className="hint" style={{ margin: "2px 0 16px" }}>
+          {trade.status === "shipped"
+            ? "Confirm only once you've received it and checked it. Zola then releases the payment to the seller."
+            : "The seller hasn't marked it as shipped yet. If it has already been handed to you, you can confirm now. Zola then releases the payment to the seller."}
+          {" "}If something is wrong, open a dispute and your payment stays held.
+        </p>
+        <div className="btn-row">
+          <button onClick={() => act("confirm")} disabled={acting} className="btn btn-primary" style={{ flex: 1 }}>
+            <CheckCircle size={17} /> Confirm delivery
+          </button>
+          <button onClick={() => act("dispute")} disabled={acting} className="btn btn-danger-outline">
+            <AlertTriangle size={17} /> Open a dispute
+          </button>
+        </div>
+      </section>
+    );
+  } else if (isVendor && trade.status === "pending_payment") {
+    action = (
+      <section className="card card-pad tx-action fade-up" aria-labelledby="wait-title">
+        <h2 id="wait-title" className="section-title">Waiting for the buyer to pay</h2>
+        <p className="hint" style={{ margin: "2px 0 14px" }}>
+          {trade.buyer_name} has been notified. Don&apos;t ship anything until Zola confirms the payment is held.
+        </p>
+        <button onClick={notify} className="btn btn-secondary">
+          <RefreshCw size={16} /> Send a reminder
+        </button>
+        {notified && <p role="status" style={{ fontSize: 14, color: "var(--emerald-press)", fontWeight: 600, marginTop: 10 }}>Reminder sent.</p>}
+      </section>
+    );
+  } else if (isVendor && trade.status === "funds_held") {
+    action = (
+      <section className="card card-pad card-mint tx-action fade-up" aria-labelledby="ship-title">
+        <h2 id="ship-title" className="section-title">Payment has been secured</h2>
+        <p style={{ fontSize: 14.5, margin: "2px 0 16px", color: "var(--emerald-press)" }}>
+          Complete the delivery to receive your funds. Once you&apos;ve shipped or handed over the order, mark it as shipped.
+        </p>
+        <button onClick={() => act("ship", { trackingNumber: "" })} disabled={acting} className="btn btn-primary">
+          <Truck size={17} /> {acting ? "Marking..." : "Mark as shipped"}
+        </button>
+      </section>
+    );
+  } else if (isAdmin && trade.status === "pending_release") {
+    action = (
+      <section className="card card-pad card-wait tx-action fade-up" aria-labelledby="release-title">
+        <h2 id="release-title" className="section-title">Release this payment</h2>
+        <p className="hint" style={{ margin: "2px 0 16px" }}>
+          The buyer confirmed delivery. Release {money(trade.amount)} to {trade.vendor_name}.
+        </p>
+        <button onClick={async () => { setActing(true); await fetch(`/api/admin/release/${id}`, { method: "POST" }); await load(); setActing(false); }} disabled={acting} className="btn btn-primary">
+          <ShieldCheck size={17} /> {acting ? "Releasing..." : "Release payment"}
+        </button>
+      </section>
+    );
+  }
 
   return (
-    <div style={{ background: "#0c0c0c", minHeight: "100vh" }}>
+    <div className="page">
       <Navbar user={{ name: user.name, role: user.role }} />
-      <style>{`
-        @keyframes spin    { to { transform: rotate(360deg); } }
-        @keyframes fade-up { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
-        .fade-up { animation: fade-up 0.2s ease forwards; }
-        input:focus { border-color: #22c55e !important; }
-        textarea:focus { border-color: #22c55e !important; }
-      `}</style>
 
-      <main style={{ maxWidth: 640, margin: "0 auto", padding: "32px 20px 80px" }}>
-        <Link href="/dashboard" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#555", fontSize: 13, textDecoration: "none", marginBottom: 24 }}>
-          <ArrowLeft size={13} /> Back
+      <main className="container main">
+        <Link href={isAdmin ? "/admin" : "/dashboard"} className="back-link">
+          <ArrowLeft size={15} /> Back
         </Link>
 
         {/* Header */}
-        <div className="fade-up" style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 11, color: "#444", fontFamily: "monospace", marginBottom: 4 }}>
-                {trade.id.slice(0,8).toUpperCase()}
-              </p>
-              <h1 style={{ fontSize: 20, fontWeight: 600, color: "#f0f0f0", margin: "0 0 6px", letterSpacing: "-0.02em" }}>{trade.title}</h1>
-              <span style={{ fontSize: 12, fontWeight: 500, color: s.color }}>{s.label}</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              {canEdit && !editing && (
-                <>
-                  <button onClick={() => { setEditForm({ title: trade.title, description: trade.description, amount: String(trade.amount), deliveryDays: String(trade.delivery_days || 7) }); setEditing(true); setEditErr(""); }}
-                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #242424", background: "transparent", color: "#555", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontFamily: "inherit" }}>
-                    <Edit3 size={12} /> Edit
-                  </button>
-                  <button onClick={() => setDelConfirm(true)}
-                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.2)", background: "transparent", color: "#ef4444", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontFamily: "inherit" }}>
-                    <Trash2 size={12} /> Delete
-                  </button>
-                </>
-              )}
-            </div>
+        <div className="tx-head fade-up">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <StatusPill status={trade.status} />
+            <h1 className="page-title" style={{ margin: "10px 0 4px", overflowWrap: "anywhere" }}>{trade.title}</h1>
+            <p className="tx-id">Transaction ID <strong>{shortId(trade.id)}</strong></p>
           </div>
-
-          {/* Progress bar */}
-          {step > 0 && (
-            <div style={{ display: "flex", alignItems: "center", marginTop: 16 }}>
-              {STEPS.map((label, i) => {
-                const n = i + 1;
-                const done   = step > n;
-                const active = step === n;
-                return (
-                  <div key={label} style={{ display: "flex", alignItems: "center", flex: i < STEPS.length - 1 ? 1 : "none" }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                      <div style={{ width: 20, height: 20, borderRadius: "50%", background: done ? "#22c55e" : active ? "rgba(34,197,94,0.15)" : "#1a1a1a", border: `1.5px solid ${done || active ? "#22c55e" : "#2a2a2a"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 600, color: done ? "#fff" : active ? "#22c55e" : "#444" }}>
-                        {done ? "✓" : n}
-                      </div>
-                      <span style={{ fontSize: 9, color: active ? "#22c55e" : done ? "#555" : "#333", whiteSpace: "nowrap", display: window?.innerWidth < 400 ? "none" : "block" }}>{label}</span>
-                    </div>
-                    {i < STEPS.length - 1 && <div style={{ flex: 1, height: 1.5, background: done ? "#22c55e" : "#1e1e1e", margin: "0 4px", marginBottom: 14 }} />}
-                  </div>
-                );
-              })}
+          {canEdit && !editing && (
+            <div className="btn-row" style={{ flexShrink: 0, flexWrap: "nowrap" }}>
+              <button className="btn btn-secondary btn-sm" style={{ flex: "0 0 auto" }}
+                onClick={() => { setEditForm({ title: trade.title, description: trade.description, amount: String(trade.amount), deliveryDays: String(trade.delivery_days || 7) }); setEditing(true); setEditErr(""); }}>
+                <Edit3 size={15} /> Edit
+              </button>
+              <button className="btn btn-danger-outline btn-sm" style={{ flex: "0 0 auto" }} onClick={() => setDelConfirm(true)}>
+                <Trash2 size={15} /> Delete
+              </button>
             </div>
           )}
         </div>
 
         {/* Delete confirm */}
         {delConfirm && (
-          <div className="fade-up" style={{ ...sec, border: "1px solid rgba(239,68,68,0.2)" }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#ef4444", margin: "0 0 6px" }}>Delete trade?</p>
-            <p style={{ fontSize: 13, color: "#555", margin: "0 0 14px" }}>This cannot be undone. The trade and all its events will be deleted.</p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={deleteTrade} disabled={deleting}
-                style={{ padding: "8px 16px", borderRadius: 7, border: "none", background: "#ef4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: deleting ? 0.7 : 1 }}>
-                {deleting ? "Deleting..." : "Delete"}
+          <div className="card card-pad card-danger fade-up" role="alertdialog" aria-labelledby="del-title" style={{ marginBottom: 16 }}>
+            <h2 id="del-title" className="section-title">Delete this transaction?</h2>
+            <p className="hint" style={{ margin: "2px 0 14px" }}>This can&apos;t be undone. The transaction and its activity history will be removed.</p>
+            <div className="btn-row">
+              <button onClick={deleteTrade} disabled={deleting} className="btn btn-danger">
+                {deleting ? "Deleting..." : "Delete transaction"}
               </button>
-              <button onClick={() => setDelConfirm(false)}
-                style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid #242424", background: "transparent", color: "#555", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
-                Cancel
-              </button>
+              <button onClick={() => setDelConfirm(false)} className="btn btn-secondary">Keep it</button>
             </div>
           </div>
         )}
 
         {/* Edit form */}
         {editing && (
-          <div className="fade-up" style={{ ...sec, border: "1px solid #2e2e2e" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", margin: 0 }}>Edit trade</p>
-              <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#444", padding: 2, display: "flex" }}><X size={15} /></button>
+          <div className="card card-pad fade-up" style={{ marginBottom: 16 }}>
+            <div className="card-head">
+              <h2 className="section-title">Edit transaction</h2>
+              <button onClick={() => setEditing(false)} className="icon-btn" aria-label="Close" style={{ width: 36, height: 36 }}><X size={17} /></button>
             </div>
-            {editErr && <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 7, padding: "8px 12px", fontSize: 13, color: "#ef4444", marginBottom: 12 }}>{editErr}</div>}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 5, fontWeight: 500 }}>Title</label>
-                <input style={inp} value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
+            {editErr && <div className="notice notice-danger" role="alert" style={{ marginBottom: 12 }}>{editErr}</div>}
+            <div className="stack" style={{ gap: 14 }}>
+              <div className="field">
+                <label className="label" htmlFor="e-title">Title</label>
+                <input id="e-title" className="input" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
               </div>
-              <div>
-                <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 5, fontWeight: 500 }}>Description</label>
-                <textarea style={{ ...inp, resize: "vertical" as const, lineHeight: 1.5 }} rows={3} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
+              <div className="field">
+                <label className="label" htmlFor="e-desc">Description</label>
+                <textarea id="e-desc" className="textarea" rows={3} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div>
-                  <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 5, fontWeight: 500 }}>Amount (FCFA)</label>
-                  <input style={inp} type="number" min="1" value={editForm.amount} onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))} />
+              <div className="form-grid-2">
+                <div className="field">
+                  <label className="label" htmlFor="e-amount">Item price (FCFA)</label>
+                  <input id="e-amount" className="input num" type="number" min="1" inputMode="numeric" value={editForm.amount} onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))} />
                 </div>
-                <div>
-                  <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 5, fontWeight: 500 }}>Delivery days</label>
-                  <input style={inp} type="number" min="1" max="60" value={editForm.deliveryDays} onChange={e => setEditForm(f => ({ ...f, deliveryDays: e.target.value }))} />
+                <div className="field">
+                  <label className="label" htmlFor="e-days">Delivery time (days)</label>
+                  <input id="e-days" className="input num" type="number" min="1" max="60" inputMode="numeric" value={editForm.deliveryDays} onChange={e => setEditForm(f => ({ ...f, deliveryDays: e.target.value }))} />
                 </div>
               </div>
               {Number(editForm.amount) > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 10px", background: "#0c0c0c", borderRadius: 7 }}>
-                  <span style={{ fontSize: 12, color: "#555" }}>Buyer pays</span>
-                  <span style={{ fontSize: 12, fontFamily: "monospace", color: "#f0f0f0" }}>FCFA {(Number(editForm.amount) + editFee).toLocaleString()}</span>
+                <div className="kv" style={{ padding: "10px 14px", background: "var(--bg)", borderRadius: "var(--r-md)" }}>
+                  <span>Buyer pays, including the 1.5% Zola fee</span>
+                  <span>{money(Number(editForm.amount) + editFee)}</span>
                 </div>
               )}
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={saveEdit} disabled={editSaving}
-                  style={{ flex: 1, padding: "9px", borderRadius: 7, border: "none", background: "#22c55e", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: editSaving ? 0.7 : 1 }}>
-                  <Save size={13} /> {editSaving ? "Saving..." : "Save"}
+              <div className="btn-row">
+                <button onClick={saveEdit} disabled={editSaving} className="btn btn-primary" style={{ flex: 1 }}>
+                  <Save size={16} /> {editSaving ? "Saving..." : "Save changes"}
                 </button>
-                <button onClick={() => setEditing(false)}
-                  style={{ padding: "9px 14px", borderRadius: 7, border: "1px solid #242424", background: "transparent", color: "#555", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
-                  Cancel
-                </button>
+                <button onClick={() => setEditing(false)} className="btn btn-secondary">Cancel</button>
               </div>
             </div>
           </div>
@@ -282,193 +371,130 @@ export default function TradePage() {
 
         {/* Error */}
         {error && (
-          <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#ef4444", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-            <AlertTriangle size={13} /> {error}
+          <div className="notice notice-danger" role="alert" style={{ marginBottom: 16 }}>
+            <AlertTriangle size={16} /> <span>{error}</span>
           </div>
         )}
 
-        {/* Trade info */}
-        <div className="fade-up" style={sec}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-            <p style={{ fontSize: 24, fontWeight: 600, color: "#f0f0f0", fontFamily: "monospace", margin: 0, letterSpacing: "-0.02em" }}>
-              FCFA {Number(trade.amount).toLocaleString()}
-            </p>
-            <p style={{ fontSize: 12, color: "#444", margin: 0 }}>Fee: FCFA {Number(trade.fee).toLocaleString()}</p>
-          </div>
+        <div className="tx-layout">
+          <div className="tx-main">
 
-          {trade.description && (
-            <p style={{ fontSize: 13, color: "#666", lineHeight: 1.6, margin: "0 0 14px", padding: "10px", background: "#0c0c0c", borderRadius: 7 }}>
-              {trade.description}
-            </p>
-          )}
+            {/* Where the money is, what happens next, who acts */}
+            <section className="card card-pad tx-status fade-up" aria-label="Transaction status">
+              {step > 0 && <div style={{ marginBottom: 26 }}><Steps step={step} /></div>}
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {[
-              { label: "Buyer",  val: trade.buyer_name },
-              { label: "Vendor", val: trade.vendor_name },
-            ].map(p => (
-              <div key={p.label} style={{ padding: "10px 12px", background: "#0c0c0c", borderRadius: 8 }}>
-                <p style={{ fontSize: 11, color: "#444", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 500 }}>{p.label}</p>
-                <p style={{ fontSize: 13, fontWeight: 500, color: "#f0f0f0", margin: 0 }}>{p.val}</p>
-              </div>
-            ))}
-          </div>
+              <MoneyRail
+                at={s.money}
+                you={isBuyer ? "buyer" : isVendor ? "seller" : undefined}
+                names={{ buyer: trade.buyer_name?.split(" ")[0], seller: trade.vendor_name?.split(" ")[0] }}
+              />
+              <p className="where">{story.where}</p>
 
-          {(trade.delivery_deadline || trade.tracking_number) && (
-            <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {trade.delivery_deadline && <span style={{ fontSize: 11, color: "#555", background: "#0c0c0c", padding: "4px 8px", borderRadius: 5 }}>Due {new Date(trade.delivery_deadline).toLocaleDateString()}</span>}
-              {trade.tracking_number && <span style={{ fontSize: 11, color: "#555", background: "#0c0c0c", padding: "4px 8px", borderRadius: 5 }}>Tracking: {trade.tracking_number}</span>}
-            </div>
-          )}
-        </div>
-
-        {/* Buyer: pay */}
-        {isBuyer && trade.status === "pending_payment" && (
-  <div style={sec}>
-    {!paymentSent ? (
-      <>
-        <p style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", margin: "0 0 4px" }}>Complete payment</p>
-        <p style={{ fontSize: 13, color: "#555", margin: "0 0 16px" }}>
-          Total: <strong style={{ color: "#f0f0f0", fontFamily: "monospace" }}>FCFA {Number(trade.buyer_total || trade.amount).toLocaleString()}</strong>
-        </p>
-
-        <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 6, fontWeight: 500 }}>Select network</label>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-          {NETWORKS.map(n => (
-            <button key={n.id} onClick={() => setNetwork(n.id as "mtn"|"orange")}
-              style={{ padding: "10px", borderRadius: 8, border: `1.5px solid ${network === n.id ? n.color : "#242424"}`, background: network === n.id ? `${n.color}10` : "#0c0c0c", color: network === n.id ? n.color : "#555", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
-              {n.label}
-            </button>
-          ))}
-        </div>
-
-        <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 6, fontWeight: 500 }}>
-          {network ? (network === "mtn" ? "MTN" : "Orange") : "Mobile money"} number
-        </label>
-        <div style={{ display: "flex", background: "#0c0c0c", border: `1px solid ${selNet ? selNet.color + "50" : "#242424"}`, borderRadius: 8, overflow: "hidden", marginBottom: 14 }}>
-          <span style={{ padding: "0 12px", display: "flex", alignItems: "center", borderRight: `1px solid ${selNet ? selNet.color + "30" : "#242424"}`, color: "#444", fontSize: 12, fontFamily: "monospace", background: "#141414", flexShrink: 0 }}>+237</span>
-          <input type="tel" placeholder="6XXXXXXXX" value={phone}
-            onChange={e => setPhone(e.target.value.replace(/\D/g,"").slice(0,9))}
-            style={{ flex: 1, height: 40, padding: "0 12px", background: "transparent", border: "none", outline: "none", color: "#f0f0f0", fontSize: 14, fontFamily: "monospace" }} />
-        </div>
-
-        <button onClick={pay} disabled={!canPay || acting}
-          style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: canPay ? (selNet?.color || "#22c55e") : "#1a1a1a", color: canPay ? "#fff" : "#444", fontSize: 14, fontWeight: 600, cursor: canPay ? "pointer" : "not-allowed", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: acting ? 0.7 : 1 }}>
-          {acting
-            ? <><div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /> Sending prompt...</>
-            : <><ShieldCheck size={14} /> {!network ? "Select a network" : `Pay via ${selNet?.label}`}</>
-          }
-        </button>
-      </>
-    ) : (
-      // Waiting for USSD approval
-      <div style={{ textAlign: "center", padding: "8px 0" }}>
-        <div style={{ width: 40, height: 40, border: "2px solid #1e1e1e", borderTop: "2px solid #22c55e", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
-        <p style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", margin: "0 0 6px" }}>Approve the payment on your phone</p>
-        <p style={{ fontSize: 13, color: "#555", margin: "0 0 16px" }}>
-          A USSD prompt has been sent to <strong style={{ color: "#f0f0f0", fontFamily: "monospace" }}>+237{phone}</strong>.<br />
-          Approve it to complete payment.
-        </p>
-        <p style={{ fontSize: 12, color: "#444", margin: "0 0 14px" }}>This page will update automatically once payment is confirmed.</p>
-        <button onClick={() => { setPaymentSent(false); setPhone(""); setNetwork(""); }}
-          style={{ fontSize: 12, color: "#555", background: "none", border: "1px solid #242424", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontFamily: "inherit" }}>
-          Use a different number
-        </button>
-      </div>
-    )}
-  </div>
-)}
-
-        {/* Buyer: confirm/dispute */}
-        {isBuyer && ["shipped","funds_held"].includes(trade.status) && (
-          <div className="fade-up" style={sec}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", margin: "0 0 12px" }}>Received your item?</p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => act("confirm")} disabled={acting}
-                style={{ flex: 1, padding: "9px", borderRadius: 7, border: "none", background: "#22c55e", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                <CheckCircle size={13} /> Confirm delivery
-              </button>
-              <button onClick={() => act("dispute")} disabled={acting}
-                style={{ padding: "9px 14px", borderRadius: 7, border: "1px solid rgba(239,68,68,0.3)", background: "transparent", color: "#ef4444", fontSize: 13, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-                <AlertTriangle size={13} /> Dispute
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Status messages */}
-        {isBuyer && trade.status === "pending_release" && <StatusMsg color="#f59e0b" text="Delivery confirmed — admin will release funds shortly." />}
-        {isBuyer && trade.status === "complete"        && <StatusMsg color="#22c55e" text="Trade complete. Funds have been released to the vendor." />}
-        {isBuyer && trade.status === "disputed"        && <StatusMsg color="#ef4444" text="Dispute open. SafeTrade is reviewing this trade." />}
-
-        {/* Vendor: pending payment */}
-        {isVendor && trade.status === "pending_payment" && (
-          <div className="fade-up" style={sec}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", margin: "0 0 4px" }}>Waiting for buyer</p>
-            <p style={{ fontSize: 13, color: "#555", margin: "0 0 12px" }}>The buyer hasn't paid yet.</p>
-            <button onClick={notify} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid #242424", background: "transparent", color: "#888", fontSize: 13, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-              <RefreshCw size={13} /> Resend notification
-            </button>
-            {notified && <p style={{ fontSize: 12, color: "#22c55e", margin: "8px 0 0" }}>Notification resent.</p>}
-          </div>
-        )}
-
-        {/* Vendor: ship */}
-        {isVendor && trade.status === "funds_held" && (
-          <div className="fade-up" style={sec}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", margin: "0 0 4px" }}>Ready to ship</p>
-            <p style={{ fontSize: 13, color: "#555", margin: "0 0 12px" }}>Funds are secured. Ship the item and click below.</p>
-            <button onClick={() => act("ship", { trackingNumber: "" })} disabled={acting}
-              style={{ padding: "9px 16px", borderRadius: 7, border: "none", background: "#8b5cf6", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-              <Truck size={13} /> {acting ? "Marking..." : "Mark as shipped"}
-            </button>
-          </div>
-        )}
-
-        {isVendor && trade.status === "shipped"         && <StatusMsg color="#8b5cf6" text="Marked as shipped. Waiting for buyer to confirm delivery." />}
-        {isVendor && trade.status === "pending_release" && <StatusMsg color="#f59e0b" text="Buyer confirmed delivery. Admin will release your funds shortly." />}
-        {isVendor && trade.status === "complete"        && <StatusMsg color="#22c55e" text="Trade complete. Funds have been released to you." />}
-
-        {/* Admin release */}
-        {isAdmin && trade.status === "pending_release" && (
-          <div className="fade-up" style={{ ...sec, border: "1px solid rgba(245,158,11,0.2)" }}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#f59e0b", margin: "0 0 4px" }}>Action required</p>
-            <p style={{ fontSize: 13, color: "#555", margin: "0 0 12px" }}>Buyer confirmed delivery. Release FCFA {Number(trade.amount).toLocaleString()} to {trade.vendor_name}.</p>
-            <button onClick={async () => { setActing(true); await fetch(`/api/admin/release/${id}`, { method: "POST" }); await load(); setActing(false); }} disabled={acting}
-              style={{ padding: "9px 16px", borderRadius: 7, border: "none", background: "#22c55e", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-              <ShieldCheck size={13} /> {acting ? "Releasing..." : "Release funds"}
-            </button>
-          </div>
-        )}
-
-        {/* Timeline */}
-        <div className="fade-up" style={{ ...sec, marginTop: 8 }}>
-          <p style={{ fontSize: 11, fontWeight: 500, color: "#444", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 16px" }}>Timeline</p>
-          {events.length === 0 && <p style={{ fontSize: 13, color: "#444", margin: 0 }}>No events yet.</p>}
-          {events.map((ev, i) => {
-            const c = EV_COLOR[ev.type] || "#3b82f6";
-            return (
-              <div key={ev.id} style={{ display: "flex", gap: 12, position: "relative" }}>
-                {i < events.length - 1 && <div style={{ position: "absolute", left: 5, top: 18, width: 1, height: "calc(100% - 4px)", background: "#1e1e1e" }} />}
-                <div style={{ width: 11, height: 11, borderRadius: "50%", background: c, flexShrink: 0, marginTop: 4 }} />
-                <div style={{ paddingBottom: 18, flex: 1 }}>
-                  <p style={{ fontSize: 13, fontWeight: 500, color: "#f0f0f0", margin: "0 0 1px" }}>{ev.label}</p>
-                  <p style={{ fontSize: 12, color: "#555", margin: "0 0 2px" }}>{ev.detail}</p>
-                  <p style={{ fontSize: 11, color: "#333", fontFamily: "monospace", margin: 0 }}>{new Date(ev.created_at).toLocaleString()}</p>
+              <div className="answers">
+                <div className="answer">
+                  <p className="answer-q">What happens next</p>
+                  <p className="answer-a">{story.next}</p>
+                </div>
+                <div className="answer">
+                  <p className="answer-q">Who needs to act</p>
+                  <p className="answer-a" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    {story.who}
+                    {story.yourMove && <span className="tag tag-you">Your move</span>}
+                  </p>
                 </div>
               </div>
-            );
-          })}
+            </section>
+
+            {action}
+
+            {/* Activity */}
+            <section className="card card-pad tx-activity fade-up" aria-labelledby="activity-title">
+              <h2 id="activity-title" className="section-title" style={{ marginBottom: 16 }}>Activity</h2>
+              {events.length === 0
+                ? <p className="hint">Nothing has happened on this transaction yet.</p>
+                : <Timeline events={events} />}
+            </section>
+          </div>
+
+          {/* Details */}
+          <aside className="tx-aside">
+            <section className="card card-pad fade-up" aria-labelledby="money-title">
+              <p id="money-title" className="stat-label" style={{ marginBottom: 4 }}>
+                {isVendor ? "You receive" : isBuyer ? (hasPaid ? "You paid" : "Total to pay") : "Buyer pays"}
+              </p>
+              <p className="amount-xl">{money(isVendor ? trade.amount : total)}</p>
+
+              <div style={{ marginTop: 14 }}>
+                <div className="kv"><span>Item price</span><span>{money(trade.amount)}</span></div>
+                <div className="kv"><span>Zola fee (1.5%){isVendor ? ", paid by the buyer" : ""}</span><span>{money(trade.fee)}</span></div>
+                <div className="kv kv-total"><span>{isBuyer ? "Total" : "Buyer pays"}</span><span>{money(total)}</span></div>
+              </div>
+
+              {!isBuyer && (
+                <div className="receipt-out" style={{ marginTop: 14 }}>
+                  <span>{isVendor ? "Your payout" : "Seller receives"}</span><strong>{money(trade.amount)}</strong>
+                </div>
+              )}
+              {isVendor && (
+                <div className="kv" style={{ marginTop: 8 }}><span>Payout status</span><span>{PAYOUT_STATUS[trade.status] || "—"}</span></div>
+              )}
+              {isBuyer && isHeld && (
+                <div className="receipt-out" style={{ marginTop: 14 }}>
+                  <span>Held by Zola for the seller</span><strong>{money(trade.amount)}</strong>
+                </div>
+              )}
+            </section>
+
+            <section className="card card-pad fade-up" aria-labelledby="details-title">
+              <h2 id="details-title" className="section-title" style={{ marginBottom: 10 }}>Details</h2>
+
+              {trade.description && (
+                <p style={{ fontSize: 14.5, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{trade.description}</p>
+              )}
+
+              <hr className="divider" />
+
+              {[
+                { role: "Buyer",  name: trade.buyer_name,  avatar: trade.buyer_avatar,  you: isBuyer },
+                { role: "Seller", name: trade.vendor_name, avatar: trade.vendor_avatar, you: isVendor },
+              ].map(p => (
+                <div key={p.role} className="party">
+                  <span className="avatar">{initials(p.name, p.avatar)}</span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <p className="party-role">{p.role}</p>
+                    <p className="party-name">{p.name || "—"}</p>
+                  </div>
+                  {p.you && <span className="tag tag-you">You</span>}
+                </div>
+              ))}
+
+              <hr className="divider" />
+
+              <div className="kv"><span>Delivery</span><span>{DELIVERY_STATUS[trade.status] || "—"}</span></div>
+              {trade.delivery_deadline
+                ? <div className="kv"><span>Deliver by</span><span suppressHydrationWarning>{fmtDate(trade.delivery_deadline)}</span></div>
+                : trade.delivery_days && trade.status === "pending_payment"
+                  ? <div className="kv"><span>Delivery time</span><span>{trade.delivery_days} day{Number(trade.delivery_days) === 1 ? "" : "s"} after payment</span></div>
+                  : null}
+              {trade.tracking_number && <div className="kv"><span>Tracking number</span><span>{trade.tracking_number}</span></div>}
+              {trade.created_at && <div className="kv"><span>Created</span><span suppressHydrationWarning>{fmtDate(trade.created_at)}</span></div>}
+            </section>
+
+            {isBuyer && !["complete", "cancelled"].includes(trade.status) && (
+              <p className="protect" style={{ padding: "0 4px" }}>
+                <ShieldCheck size={17} />
+                <span>Your payment is protected by Zola until the transaction is completed.</span>
+              </p>
+            )}
+            {isVendor && isHeld && trade.status !== "disputed" && (
+              <p className="protect" style={{ padding: "0 4px" }}>
+                <ShieldCheck size={17} />
+                <span>The buyer&apos;s payment is held by Zola. It is released to you once delivery is confirmed.</span>
+              </p>
+            )}
+          </aside>
         </div>
       </main>
-    </div>
-  );
-}
-
-function StatusMsg({ color, text }: { color: string; text: string }) {
-  return (
-    <div style={{ background: "#141414", border: `1px solid ${color}20`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, fontSize: 13, color, display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} /> {text}
     </div>
   );
 }

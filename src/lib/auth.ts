@@ -43,3 +43,32 @@ export function cuid(): string {
   const { randomUUID } = require("crypto");
   return randomUUID();
 }
+
+/**
+ * Short-lived signed values for one specific purpose, such as the steps of
+ * the Google sign-in handshake. They are signed with a key derived from the
+ * session secret plus the purpose, so they can never be passed off as a
+ * session token (or as a token for a different purpose).
+ */
+function purposeKey(purpose: string) {
+  return new TextEncoder().encode(
+    `${process.env.JWT_SECRET || "safetrade-super-secret-key-2025"}::${purpose}`
+  );
+}
+
+export async function signTemp(payload: Record<string, unknown>, purpose: string, expiresIn = "15m") {
+  return await new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime(expiresIn)
+    .sign(purposeKey(purpose));
+}
+
+export async function verifyTemp<T = Record<string, unknown>>(token: string | undefined, purpose: string): Promise<T | null> {
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, purposeKey(purpose));
+    return payload as unknown as T;
+  } catch {
+    return null;
+  }
+}
