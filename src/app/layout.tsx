@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { themeInitScript } from "@/lib/theme";
+import PwaSetup from "@/components/PwaSetup";
 
 export const metadata: Metadata = {
   title: {
@@ -10,6 +11,9 @@ export const metadata: Metadata = {
   description:
     "Zola securely holds your payment until your transaction is completed, protecting both buyers and sellers every step of the way.",
   applicationName: "Zola",
+  // Lets iPhones open Zola full-screen when it is added to the home screen
+  appleWebApp: { capable: true, title: "Zola", statusBarStyle: "default" },
+  formatDetection: { telephone: false },
   openGraph: {
     title: "Zola — Buy and sell online with confidence.",
     description:
@@ -35,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {children}
+        <PwaSetup />
         <script type="text/javascript" src="https://www.monetbil.com/widget/v2/monetbil.min.js"></script>
       </body>
     </html>
