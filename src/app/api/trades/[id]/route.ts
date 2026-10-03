@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { notifyTradeMove } from "@/lib/notifications";
+import { quote } from "@/lib/fees";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -73,22 +74,29 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (trade.status !== "pending_payment")
       return NextResponse.json({ error: "A transaction can only be edited before the buyer pays" }, { status: 400 });
 
-    const { title, description, amount, deliveryDays } = await req.json();
+    const { title, description, amount, deliveryDays, needsDelivery } = await req.json();
     if (!title || !description || !amount)
       return NextResponse.json({ error: "Title, description and amount are required" }, { status: 400 });
 
-    const fee = parseFloat((Number(amount) * 0.015).toFixed(2));
+    // Keep the current delivery choice unless the seller changes it.
+    // Older transactions with no delivery fee stay without one.
+    const hadDelivery  = trade.needs_delivery !== undefined ? trade.needs_delivery !== false : Number(trade.delivery_fee) > 0;
+    const withDelivery = needsDelivery === undefined ? hadDelivery : needsDelivery !== false;
+    const { fee, deliveryFee, total: buyerTotal } = quote(Number(amount), withDelivery);
 
     await db.collection("trades").doc(params.id).update({
       title,
       description,
       amount: Number(amount),
       fee,
+      needs_delivery: withDelivery,
+      delivery_fee: deliveryFee,
+      buyer_total: buyerTotal,   // keep what the buyer is charged in step with the new price
       delivery_days: deliveryDays || trade.delivery_days || 7,
       updated_at: new Date().toISOString(),
     });
 
-    await notifyTradeMove("edited", { ...(trade as any), id: params.id, title, amount: Number(amount) });
+    await notifyTradeMove("edited", { ...(trade as any), id: params.id, title, amount: Number(amount), buyer_total: buyerTotal });
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

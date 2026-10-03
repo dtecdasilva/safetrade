@@ -4,6 +4,7 @@ import { getDb, initDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { sendEmail, emailLayout } from "@/lib/mail";
 import { notifyTradeMove } from "@/lib/notifications";
+import { quote, FEE_PERCENT_LABEL, DELIVERY_NOTE } from "@/lib/fees";
 import {
   notifyBuyerTradeCreated,
   notifyAdminTradeCreated,
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     if (session.role !== "vendor")
       return NextResponse.json({ error: "Only seller accounts can create transactions" }, { status: 403 });
 
-    const { title, description, amount, buyerPhone, deliveryDays } = await req.json();
+    const { title, description, amount, buyerPhone, deliveryDays, needsDelivery } = await req.json();
     if (!title || !description || !amount || !buyerPhone)
       return NextResponse.json({ error: "Please fill in the item, description, price and the buyer's phone number" }, { status: 400 });
 
@@ -67,8 +68,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "That number isn't registered to a buyer account" }, { status: 400 });
 
     // Fee added on top — buyer pays item price + fee, vendor receives full item price
-    const fee        = parseFloat((Number(amount) * 0.015).toFixed(2));
-    const buyerTotal = parseFloat((Number(amount) + fee).toFixed(2));
+    // Delivery is added unless the seller says there is nothing to deliver (a service, for example)
+    const withDelivery = needsDelivery !== false;
+    const { fee, deliveryFee, total: buyerTotal } = quote(Number(amount), withDelivery);
 
     const id  = randomUUID();
     const now = new Date().toISOString();
@@ -80,7 +82,9 @@ export async function POST(req: NextRequest) {
       id, title, description,
       amount:      Number(amount),  // vendor receives this in full
       fee,                           // Zola fee paid by buyer
-      buyer_total: buyerTotal,       // total buyer pays
+      needs_delivery: withDelivery,  // false for services and other things with nothing to deliver
+      delivery_fee: deliveryFee,     // standard delivery, paid by buyer (0 when not needed)
+      buyer_total: buyerTotal,       // total buyer pays (item + fee + delivery)
       status:            "pending_payment",
       delivery_days:     deliveryDays || 7,
       delivery_deadline: null,
@@ -133,18 +137,19 @@ export async function POST(req: NextRequest) {
     const emailResult = await sendEmail({
       to: buyer.email,
       subject: `Zola: ${session.name} created a transaction for you`,
-      text: `Hi ${buyer.name},\n\n${session.name} created a transaction for you on Zola.\n\nItem: ${title}\nItem price: FCFA ${Number(amount).toLocaleString()}\nZola fee (1.5%): FCFA ${fee.toLocaleString()}\nTotal to pay: FCFA ${buyerTotal.toLocaleString()}\n\nReview and pay securely: ${appUrl}/trade/${id}\n\nYou pay Zola, not the seller. We hold your payment until you confirm delivery.\n\nZola\nSecure transactions. Simple payments.`,
+      text: `Hi ${buyer.name},\n\n${session.name} created a transaction for you on Zola.\n\nItem: ${title}\nItem price: FCFA ${Number(amount).toLocaleString()}\nZola fee (${FEE_PERCENT_LABEL}): FCFA ${fee.toLocaleString()}${deliveryFee > 0 ? `\nDelivery: FCFA ${deliveryFee.toLocaleString()}` : ""}\nTotal to pay: FCFA ${buyerTotal.toLocaleString()}\n\nReview and pay securely: ${appUrl}/trade/${id}\n\nYou pay Zola, not the seller. We hold your payment until you confirm delivery.\n\nZola\nSecure transactions. Simple payments.`,
       html: emailLayout({
         heading: `${session.name} created a transaction for you`,
         intro: `Hi ${buyer.name}, review the details below and pay securely when you're ready.`,
         rows: [
           ["Item", title],
           ["Item price", `FCFA ${Number(amount).toLocaleString()}`],
-          ["Zola fee (1.5%)", `FCFA ${fee.toLocaleString()}`],
+          [`Zola fee (${FEE_PERCENT_LABEL})`, `FCFA ${fee.toLocaleString()}`],
+          ...(deliveryFee > 0 ? [["Delivery", `FCFA ${deliveryFee.toLocaleString()}`] as [string, string]] : []),
         ],
         totalRow: ["Total to pay", `FCFA ${buyerTotal.toLocaleString()}`],
         cta: { label: "Review and pay securely", url: `${appUrl}/trade/${id}` },
-        note: "You pay Zola, not the seller. We hold your payment until you confirm delivery.",
+        note: `You pay Zola, not the seller. We hold your payment until you confirm delivery.${deliveryFee > 0 ? ` ${DELIVERY_NOTE}` : ""}`,
       }),
     });
 

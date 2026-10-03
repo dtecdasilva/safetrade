@@ -6,11 +6,12 @@ import Navbar from "@/components/Navbar";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { PageLoader, PhoneField } from "@/components/ui";
 import { money } from "@/lib/zola";
+import { quote, FEE_PERCENT_LABEL, DELIVERY_FEE, DELIVERY_NOTE } from "@/lib/fees";
 
 export default function NewTradePage() {
   const router = useRouter();
   const [user, setUser]   = useState<any>(null);
-  const [form, setForm]   = useState({ title: "", description: "", amount: "", buyerPhone: "", deliveryDays: "7" });
+  const [form, setForm]   = useState({ title: "", description: "", amount: "", buyerPhone: "", deliveryDays: "7", needsDelivery: true });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -23,14 +24,13 @@ export default function NewTradePage() {
   }, [router]);
 
   const amount     = parseFloat(form.amount) || 0;
-  const fee        = parseFloat((amount * 0.015).toFixed(2));
-  const buyerTotal = parseFloat((amount + fee).toFixed(2));
+  const { fee, deliveryFee, total: buyerTotal } = quote(amount, form.needsDelivery);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      const res  = await fetch("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.title, description: form.description, amount, buyerPhone: form.buyerPhone, deliveryDays: parseInt(form.deliveryDays) }) });
+      const res  = await fetch("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.title, description: form.description, amount, buyerPhone: form.buyerPhone, deliveryDays: parseInt(form.deliveryDays), needsDelivery: form.needsDelivery }) });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       router.push(`/trade/${data.tradeId}`);
@@ -74,6 +74,25 @@ export default function NewTradePage() {
             </div>
 
             <div className="field">
+              <span className="label">Does it need to be delivered?</span>
+              <div className="seg" role="group" aria-label="Delivery">
+                <button type="button" className="seg-item" aria-pressed={form.needsDelivery}
+                  onClick={() => setForm(p => ({ ...p, needsDelivery: true }))}>
+                  Yes, deliver it
+                </button>
+                <button type="button" className="seg-item" aria-pressed={!form.needsDelivery}
+                  onClick={() => setForm(p => ({ ...p, needsDelivery: false }))}>
+                  No, nothing to deliver
+                </button>
+              </div>
+              <p className="hint">
+                {form.needsDelivery
+                  ? `${money(DELIVERY_FEE)} is added to the buyer's total for a standard delivery, and the buyer can track it after paying.`
+                  : "For services, digital items, or anything you hand over yourself. No delivery fee is added."}
+              </p>
+            </div>
+
+            <div className="field">
               <label className="label" htmlFor="buyerPhone">Buyer&apos;s phone number</label>
               <PhoneField id="buyerPhone" value={form.buyerPhone} onChange={v => setForm(p => ({ ...p, buyerPhone: v }))} required />
               <p className="hint">The buyer needs a Zola account registered with this number.</p>
@@ -86,7 +105,7 @@ export default function NewTradePage() {
                   onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} required />
               </div>
               <div className="field">
-                <label className="label" htmlFor="days">Delivery time (days)</label>
+                <label className="label" htmlFor="days">{form.needsDelivery ? "Delivery time (days)" : "Time to complete (days)"}</label>
                 <input id="days" className="input num" type="number" min="1" max="60" inputMode="numeric" value={form.deliveryDays}
                   onChange={e => setForm(p => ({ ...p, deliveryDays: e.target.value }))} />
               </div>
@@ -98,11 +117,17 @@ export default function NewTradePage() {
             <div className="card card-pad fade-up">
               <h2 className="section-title" style={{ marginBottom: 8 }}>Who pays what</h2>
               <div className="kv"><span>Item price</span><span>{money(amount)}</span></div>
-              <div className="kv"><span>Zola fee (1.5%), added to the buyer&apos;s total</span><span>{money(fee)}</span></div>
+              <div className="kv"><span>Zola fee ({FEE_PERCENT_LABEL}), paid by the buyer</span><span>{money(fee)}</span></div>
+              {deliveryFee > 0 && <div className="kv"><span>Delivery, paid by the buyer</span><span>{money(deliveryFee)}</span></div>}
               <div className="kv kv-total"><span>Buyer pays</span><span>{money(buyerTotal)}</span></div>
               <div className="receipt-out" style={{ marginTop: 14 }}>
                 <span>You receive</span><strong>{money(amount)}</strong>
               </div>
+              {deliveryFee > 0 && (
+                <p className="hint" style={{ marginTop: 12 }}>
+                  {DELIVERY_NOTE.replace("your item costs", "the item costs").replace("you will have to pay", "the buyer pays")}
+                </p>
+              )}
             </div>
           )}
 

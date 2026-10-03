@@ -131,7 +131,7 @@ export interface StatusStory {
  * must answer: where the money is, what happens next, and who acts.
  */
 export function statusStory(
-  trade: { status: string; amount: number; buyer_total?: number; buyer_name?: string; vendor_name?: string },
+  trade: { status: string; amount: number; buyer_total?: number; buyer_name?: string; vendor_name?: string; needs_delivery?: boolean },
   viewer: ViewerRole
 ): StatusStory {
   const held  = money(trade.amount);
@@ -158,7 +158,7 @@ export function statusStory(
         next: isBuyer
           ? "The seller needs to ship your order."
           : isSeller
-            ? "Deliver the order, then mark it as shipped."
+            ? (trade.needs_delivery === false ? "Complete the work, then mark it as delivered." : "Deliver the order, then mark it as shipped.")
             : "The seller needs to deliver the order.",
         who: isSeller ? "You" : seller,
         yourMove: isSeller,

@@ -814,3 +814,62 @@ img, svg { max-width: 100%; }
 .btn-google:hover { background: var(--bg); border-color: var(--ink-4); }
 .or-rule { display: flex; align-items: center; gap: 14px; margin: 18px 0; color: var(--ink-3); font-size: 13.5px; }
 .or-rule::before, .or-rule::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+/* ── Delivery tracking ──────────────────────────────────────────────────────
+   Stand-in for the separate delivery company's site. It has its own look
+   (navy and gold) so it reads as a different platform from Zola. */
+
+.dlv { min-height: 100vh; background: var(--bg); --dlv-navy: #102A43; --dlv-gold: #F4B942; }
+.dlv-band { background: var(--dlv-navy); color: #fff; padding-bottom: 76px; }
+.dlv-bar { max-width: 860px; margin: 0 auto; padding: 0 20px; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.dlv-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+.dlv-brand-mark { width: 32px; height: 32px; border-radius: 9px; background: var(--dlv-gold); color: var(--dlv-navy); display: flex; align-items: center; justify-content: center; }
+.dlv-via { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #BCCCDC; white-space: nowrap; }
+.dlv-hero { max-width: 860px; margin: 0 auto; padding: 28px 20px 0; }
+.dlv-ref { font-size: 13.5px; color: #BCCCDC; font-variant-numeric: tabular-nums; }
+.dlv-ref strong { color: #fff; font-weight: 700; letter-spacing: 0.04em; }
+.dlv-title { font-size: clamp(28px, 4.6vw, 40px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; color: #fff; margin-top: 10px; }
+.dlv-sub { font-size: 16.5px; color: #D9E2EC; margin-top: 10px; max-width: 52ch; }
+.dlv-meter { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 26px; max-width: 520px; }
+.dlv-meter span { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.18); }
+.dlv-meter span.is-done { background: var(--dlv-gold); }
+.dlv-meter span.is-now { background: linear-gradient(90deg, var(--dlv-gold) 50%, rgba(255, 255, 255, 0.18) 50%); }
+
+.dlv-main { max-width: 860px; margin: -52px auto 0; padding: 0 20px 72px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.dlv-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.dlv-route { list-style: none; }
+.dlv-stop { display: grid; grid-template-columns: 26px minmax(0, 1fr); column-gap: 14px; position: relative; padding-bottom: 24px; }
+.dlv-stop:last-child { padding-bottom: 0; }
+.dlv-stop::before { content: ""; position: absolute; left: 12px; top: 28px; bottom: 0; width: 2px; background: var(--line); }
+.dlv-stop:last-child::before { display: none; }
+.dlv-stop.is-done::before { background: var(--dlv-gold); }
+.dlv-mark { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface); border: 2px solid var(--line); color: transparent; position: relative; z-index: 1; }
+.dlv-stop.is-done .dlv-mark { background: var(--dlv-gold); border-color: var(--dlv-gold); color: var(--dlv-navy); }
+.dlv-stop.is-now .dlv-mark { border-color: var(--dlv-gold); }
+.dlv-stop.is-now .dlv-mark::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--dlv-gold); }
+.dlv-stop-title { font-size: 15.5px; font-weight: 600; color: var(--ink-3); line-height: 1.6; }
+.dlv-stop.is-done .dlv-stop-title, .dlv-stop.is-now .dlv-stop-title { color: var(--navy); }
+.dlv-stop.is-now .dlv-stop-title { font-weight: 700; }
+.dlv-stop-text { font-size: 14px; color: var(--ink-3); line-height: 1.45; }
+.dlv-stop-time { font-size: 12.5px; color: var(--ink-4); margin-top: 2px; display: block; font-variant-numeric: tabular-nums; }
+
+.dlv-fee { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.dlv-fee strong { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: var(--navy); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dlv-note { margin-top: 14px; padding: 12px 14px; border-radius: var(--r-md); background: var(--gold-tint); border: 1px solid var(--gold-line); color: var(--ink-2); font-size: 14px; line-height: 1.5; }
+.dlv-note strong { color: var(--navy); }
+.dlv-btn { background: var(--dlv-navy); color: #fff; }
+.dlv-btn:hover { background: #1B3A57; }
+:root[data-theme="dark"] .dlv-btn { background: var(--dlv-gold); color: var(--dlv-navy); }
+:root[data-theme="dark"] .dlv-btn:hover { background: #E5AB36; }
+.dlv-foot { max-width: 860px; margin: 0 auto; padding: 0 20px 40px; font-size: 13.5px; color: var(--ink-3); }
+
+@media (max-width: 760px) {
+  .dlv-main { grid-template-columns: 1fr; }
+  .dlv-via span { display: none; }
+}
+@media (max-width: 640px) {
+  .dlv-bar, .dlv-hero, .dlv-main, .dlv-foot { padding-left: 16px; padding-right: 16px; }
+  .dlv-hero { padding-top: 18px; }
+  .dlv-sub { font-size: 15.5px; }
+}

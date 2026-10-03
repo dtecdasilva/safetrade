@@ -34,7 +34,7 @@ export default async function Home() {
               </div>
               <ul className="hero-facts">
                 <li><Check size={17} strokeWidth={2.5} /> The seller is paid only after the buyer confirms delivery</li>
-                <li><Check size={17} strokeWidth={2.5} /> One clear fee, shown before anyone pays</li>
+                <li><Check size={17} strokeWidth={2.5} /> Fees and delivery shown before anyone pays</li>
                 <li><Check size={17} strokeWidth={2.5} /> Every step is recorded, with a transaction ID</li>
               </ul>
             </div>
@@ -77,7 +77,7 @@ export default async function Home() {
                 <h3 className="side-title">The payment is secured before you ship anything.</h3>
                 <ul className="side-list">
                   <li><Check size={19} strokeWidth={2.5} /><span><strong>Know the buyer has paid.</strong> Zola tells you the moment the payment is held.</span></li>
-                  <li><Check size={19} strokeWidth={2.5} /><span><strong>Keep the full price.</strong> You receive the whole item price. The Zola fee is added to the buyer&apos;s total.</span></li>
+                  <li><Check size={19} strokeWidth={2.5} /><span><strong>Keep the full price.</strong> You receive the whole item price. The Zola fee and delivery are added to the buyer&apos;s total.</span></li>
                   <li><Check size={19} strokeWidth={2.5} /><span><strong>Withdraw to mobile money.</strong> Once a transaction is completed, the funds are in your Zola wallet.</span></li>
                 </ul>
               </div>
@@ -89,10 +89,16 @@ export default async function Home() {
         <section id="fees" className="section section-tint" style={{ scrollMarginTop: 64 }}>
           <div className="container fees-grid">
             <div>
-              <h2 className="h2">One fee, shown before you pay</h2>
+              <h2 className="h2">The full cost, shown before you pay</h2>
               <p className="lead">
-                Zola charges 1.5% of the item price. It is added to the buyer&apos;s total and shown
-                clearly before payment. The seller receives the full price they asked for.
+                Zola charges 5% of the item price, plus FCFA 1,000 for delivery. Both are added to
+                the buyer&apos;s total and shown clearly before payment. The seller receives the full
+                price they asked for.
+              </p>
+              <p className="lead" style={{ fontSize: 15.5 }}>
+                The FCFA 1,000 covers a standard delivery. If your item costs more than that to
+                deliver, you will have to pay the difference. For services with nothing to deliver,
+                no delivery fee is added.
               </p>
               <p className="lead" style={{ fontSize: 15.5, color: "var(--ink-3)" }}>
                 No service can remove every risk from buying and selling online. What Zola does is keep
@@ -102,8 +108,9 @@ export default async function Home() {
             <div className="receipt" aria-label="Example of how the fee works">
               <p className="receipt-title">Example</p>
               <div className="kv"><span>Item price</span><span>FCFA 100,000</span></div>
-              <div className="kv"><span>Zola fee (1.5%)</span><span>FCFA 1,500</span></div>
-              <div className="kv kv-total"><span>Buyer pays</span><span>FCFA 101,500</span></div>
+              <div className="kv"><span>Zola fee (5%)</span><span>FCFA 5,000</span></div>
+              <div className="kv"><span>Delivery</span><span>FCFA 1,000</span></div>
+              <div className="kv kv-total"><span>Buyer pays</span><span>FCFA 106,000</span></div>
               <div className="receipt-out"><span>Seller receives</span><strong>FCFA 100,000</strong></div>
             </div>
           </div>

@@ -18,7 +18,16 @@ const FAQ: { q: string; a: string[] }[] = [
   {
     q: "How much does Zola cost?",
     a: [
-      "Zola charges 1.5% of the item price. The fee is added to the buyer's total and shown before payment. The seller receives the full item price.",
+      "Zola charges 5% of the item price, plus FCFA 1,000 for delivery. Both are added to the buyer's total and shown before payment. The seller receives the full item price.",
+      "The delivery fee only applies when there is something to deliver. For a service, or anything the seller hands over themselves, the seller switches delivery off and only the 5% is added.",
+      "The FCFA 1,000 covers a standard delivery. If your item costs more than that to deliver, you will have to pay the difference.",
+    ],
+  },
+  {
+    q: "How do I follow my delivery?",
+    a: [
+      "Once you've paid, Zola takes you to the delivery tracking page for your order. You can come back to it any time from the Track delivery button on the transaction.",
+      "When the order arrives, return to the transaction on Zola and confirm delivery so the seller can be paid.",
     ],
   },
   {

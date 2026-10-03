@@ -3,9 +3,11 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { ArrowLeft, CheckCircle, AlertTriangle, Truck, ShieldCheck, RefreshCw, Edit3, Trash2, X, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle, AlertTriangle, Truck, ShieldCheck, RefreshCw, Edit3, Trash2, X, Save, MapPin } from "lucide-react";
 import { MoneyRail, PageLoader, PhoneField, StatusPill, Steps, Timeline } from "@/components/ui";
 import { fmtDate, initials, money, shortId, statusMeta, statusStory, ViewerRole } from "@/lib/zola";
+import { quote, feePercentOf, FEE_PERCENT_LABEL, DELIVERY_NOTE } from "@/lib/fees";
+import { deliveryTrackingUrl } from "@/lib/delivery";
 
 const NETWORKS = [
   { id: "mtn",    label: "MTN MoMo" },
@@ -48,13 +50,14 @@ export default function TradePage() {
   const [phone, setPhone]     = useState("");
   const [network, setNetwork] = useState<"mtn"|"orange"|"">("");
   const [paymentSent, setPaymentSent] = useState(false);
+  const [toTracking, setToTracking]   = useState(false);
 
   // Notify
   const [notified, setNotified] = useState(false);
 
   // Edit
   const [editing, setEditing]     = useState(false);
-  const [editForm, setEditForm]   = useState({ title: "", description: "", amount: "", deliveryDays: "" });
+  const [editForm, setEditForm]   = useState({ title: "", description: "", amount: "", deliveryDays: "", needsDelivery: true });
   const [editErr, setEditErr]     = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
@@ -73,6 +76,13 @@ export default function TradePage() {
   }, [id, router]);
 
   useEffect(() => { load(); }, [load]);
+
+  // A moment after payment is confirmed, move the buyer on to delivery tracking
+  useEffect(() => {
+    if (!toTracking) return;
+    const t = setTimeout(() => { window.location.assign(deliveryTrackingUrl(id)); }, 3500);
+    return () => clearTimeout(t);
+  }, [toTracking, id]);
 
   // When a notification arrives (the other side paid, shipped, confirmed...), show the new status straight away
   useEffect(() => {
@@ -119,6 +129,8 @@ export default function TradePage() {
         if (d.trade?.status !== "pending_payment") {
           clearInterval(poll);
           await load();
+          // Paid: hand over to the delivery platform so the buyer can follow the order
+          if (d.trade?.status === "funds_held" && Number(d.trade?.delivery_fee) > 0) setToTracking(true);
         }
         if (attempts >= 36) clearInterval(poll); // stop after 3 mins
       }, 5000);
@@ -133,7 +145,7 @@ export default function TradePage() {
   async function saveEdit() {
     setEditErr(""); setEditSaving(true);
     try {
-      const res  = await fetch(`/api/trades/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: editForm.title, description: editForm.description, amount: Number(editForm.amount), deliveryDays: Number(editForm.deliveryDays) }) });
+      const res  = await fetch(`/api/trades/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: editForm.title, description: editForm.description, amount: Number(editForm.amount), deliveryDays: Number(editForm.deliveryDays), needsDelivery: editForm.needsDelivery }) });
       const data = await res.json();
       if (!res.ok) { setEditErr(data.error); return; }
       setEditing(false); await load();
@@ -158,7 +170,10 @@ export default function TradePage() {
   const step     = s.step;
   const selNet   = NETWORKS.find(n => n.id === network);
   const canPay   = phone.length >= 8 && !!network;
-  const editFee  = Number(editForm.amount) ? parseFloat((Number(editForm.amount) * 0.015).toFixed(2)) : 0;
+  const editQuote = quote(Number(editForm.amount), editForm.needsDelivery);
+  const deliveryFee = Number(trade.delivery_fee) || 0;
+  // Only transactions that paid for delivery have something to track
+  const hasDelivery = deliveryFee > 0;
 
   const viewer: ViewerRole = isBuyer ? "buyer" : isVendor ? "seller" : "admin";
   const story   = statusStory(trade, viewer);
@@ -177,10 +192,16 @@ export default function TradePage() {
           You pay Zola, not the seller. We hold your payment until you confirm delivery.
         </p>
 
-        <div className="kv" style={{ padding: "12px 14px", background: "var(--bg)", borderRadius: "var(--r-md)", marginBottom: 18 }}>
-          <span>Total to pay</span>
-          <span style={{ fontSize: 18, fontWeight: 800 }}>{money(total)}</span>
+        <div style={{ padding: "8px 14px 12px", background: "var(--bg)", borderRadius: "var(--r-md)", marginBottom: deliveryFee > 0 ? 8 : 18 }}>
+          <div className="kv"><span>Item price</span><span>{money(trade.amount)}</span></div>
+          <div className="kv"><span>Zola fee ({feePercentOf(trade)})</span><span>{money(trade.fee)}</span></div>
+          {deliveryFee > 0 && <div className="kv"><span>Delivery</span><span>{money(deliveryFee)}</span></div>}
+          <div className="kv kv-total">
+            <span>Total to pay</span>
+            <span style={{ fontSize: 18, fontWeight: 800 }}>{money(total)}</span>
+          </div>
         </div>
+        {deliveryFee > 0 && <p className="hint" style={{ marginBottom: 18 }}>{DELIVERY_NOTE}</p>}
 
         <div className="field" style={{ marginBottom: 14 }}>
           <span className="label">Network</span>
@@ -262,10 +283,12 @@ export default function TradePage() {
       <section className="card card-pad card-mint tx-action fade-up" aria-labelledby="ship-title">
         <h2 id="ship-title" className="section-title">Payment has been secured</h2>
         <p style={{ fontSize: 14.5, margin: "2px 0 16px", color: "var(--emerald-press)" }}>
-          Complete the delivery to receive your funds. Once you&apos;ve shipped or handed over the order, mark it as shipped.
+          {hasDelivery
+            ? "Complete the delivery to receive your funds. Once you've shipped or handed over the order, mark it as shipped."
+            : "Complete the work to receive your funds. Once you've delivered what was agreed, mark it as delivered."}
         </p>
         <button onClick={() => act("ship", { trackingNumber: "" })} disabled={acting} className="btn btn-primary">
-          <Truck size={17} /> {acting ? "Marking..." : "Mark as shipped"}
+          <Truck size={17} /> {acting ? "Marking..." : hasDelivery ? "Mark as shipped" : "Mark as delivered"}
         </button>
       </section>
     );
@@ -302,7 +325,7 @@ export default function TradePage() {
           {canEdit && !editing && (
             <div className="btn-row" style={{ flexShrink: 0, flexWrap: "nowrap" }}>
               <button className="btn btn-secondary btn-sm" style={{ flex: "0 0 auto" }}
-                onClick={() => { setEditForm({ title: trade.title, description: trade.description, amount: String(trade.amount), deliveryDays: String(trade.delivery_days || 7) }); setEditing(true); setEditErr(""); }}>
+                onClick={() => { setEditForm({ title: trade.title, description: trade.description, amount: String(trade.amount), deliveryDays: String(trade.delivery_days || 7), needsDelivery: trade.needs_delivery !== undefined ? trade.needs_delivery !== false : Number(trade.delivery_fee) > 0 }); setEditing(true); setEditErr(""); }}>
                 <Edit3 size={15} /> Edit
               </button>
               <button className="btn btn-danger-outline btn-sm" style={{ flex: "0 0 auto" }} onClick={() => setDelConfirm(true)}>
@@ -353,10 +376,19 @@ export default function TradePage() {
                   <input id="e-days" className="input num" type="number" min="1" max="60" inputMode="numeric" value={editForm.deliveryDays} onChange={e => setEditForm(f => ({ ...f, deliveryDays: e.target.value }))} />
                 </div>
               </div>
+              <div className="field">
+                <span className="label">Does it need to be delivered?</span>
+                <div className="seg" role="group" aria-label="Delivery">
+                  <button type="button" className="seg-item" aria-pressed={editForm.needsDelivery}
+                    onClick={() => setEditForm(f => ({ ...f, needsDelivery: true }))}>Yes, deliver it</button>
+                  <button type="button" className="seg-item" aria-pressed={!editForm.needsDelivery}
+                    onClick={() => setEditForm(f => ({ ...f, needsDelivery: false }))}>No, nothing to deliver</button>
+                </div>
+              </div>
               {Number(editForm.amount) > 0 && (
                 <div className="kv" style={{ padding: "10px 14px", background: "var(--bg)", borderRadius: "var(--r-md)" }}>
-                  <span>Buyer pays, including the 1.5% Zola fee</span>
-                  <span>{money(Number(editForm.amount) + editFee)}</span>
+                  <span>Buyer pays, including the {FEE_PERCENT_LABEL} Zola fee{editQuote.deliveryFee > 0 ? ` and ${money(editQuote.deliveryFee)} delivery` : ""}</span>
+                  <span>{money(editQuote.total)}</span>
                 </div>
               )}
               <div className="btn-row">
@@ -366,6 +398,17 @@ export default function TradePage() {
                 <button onClick={() => setEditing(false)} className="btn btn-secondary">Cancel</button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Paid: on the way to delivery tracking */}
+        {toTracking && (
+          <div className="notice notice-ok fade-up" role="status" style={{ marginBottom: 16 }}>
+            <CheckCircle size={16} />
+            <span>
+              Payment received. Zola is holding it safely. Taking you to delivery tracking...{" "}
+              <button type="button" className="link-btn" style={{ color: "inherit", textDecoration: "underline" }} onClick={() => setToTracking(false)}>Stay here</button>
+            </span>
           </div>
         )}
 
@@ -426,7 +469,8 @@ export default function TradePage() {
 
               <div style={{ marginTop: 14 }}>
                 <div className="kv"><span>Item price</span><span>{money(trade.amount)}</span></div>
-                <div className="kv"><span>Zola fee (1.5%){isVendor ? ", paid by the buyer" : ""}</span><span>{money(trade.fee)}</span></div>
+                <div className="kv"><span>Zola fee ({feePercentOf(trade)}){isVendor ? ", paid by the buyer" : ""}</span><span>{money(trade.fee)}</span></div>
+                {deliveryFee > 0 && <div className="kv"><span>Delivery{isVendor ? ", paid by the buyer" : ""}</span><span>{money(deliveryFee)}</span></div>}
                 <div className="kv kv-total"><span>{isBuyer ? "Total" : "Buyer pays"}</span><span>{money(total)}</span></div>
               </div>
 
@@ -470,7 +514,7 @@ export default function TradePage() {
 
               <hr className="divider" />
 
-              <div className="kv"><span>Delivery</span><span>{DELIVERY_STATUS[trade.status] || "—"}</span></div>
+              <div className="kv"><span>Delivery</span><span>{trade.needs_delivery === false ? "Not needed for this transaction" : DELIVERY_STATUS[trade.status] || "—"}</span></div>
               {trade.delivery_deadline
                 ? <div className="kv"><span>Deliver by</span><span suppressHydrationWarning>{fmtDate(trade.delivery_deadline)}</span></div>
                 : trade.delivery_days && trade.status === "pending_payment"
@@ -478,6 +522,14 @@ export default function TradePage() {
                   : null}
               {trade.tracking_number && <div className="kv"><span>Tracking number</span><span>{trade.tracking_number}</span></div>}
               {trade.created_at && <div className="kv"><span>Created</span><span suppressHydrationWarning>{fmtDate(trade.created_at)}</span></div>}
+              {hasPaid && hasDelivery && (
+                <a href={deliveryTrackingUrl(trade.id)} className="btn btn-secondary btn-block" style={{ marginTop: 12 }}>
+                  <MapPin size={16} /> Track delivery
+                </a>
+              )}
+              {deliveryFee > 0 && !isVendor && !["complete", "cancelled"].includes(trade.status) && (
+                <p className="hint" style={{ marginTop: 10 }}>{DELIVERY_NOTE}</p>
+              )}
             </section>
 
             {isBuyer && !["complete", "cancelled"].includes(trade.status) && (

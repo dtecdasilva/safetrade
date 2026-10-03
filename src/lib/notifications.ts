@@ -117,7 +117,7 @@ export async function notifyTradeMove(
       case "edited":
         out.push({ ...base, userId: trade.buyer_id, tone: "info",
           title: "Transaction details changed",
-          body: `${seller} updated ${item}. Review the details before paying.` });
+          body: `${seller} updated ${item}. The total to pay is now ${total}. Review the details before paying.` });
         break;
 
       case "deleted":
