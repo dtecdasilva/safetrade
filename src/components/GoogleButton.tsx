@@ -1,10 +1,67 @@
-import React from "react";
+"use client";
+import React, { useEffect, useRef, useState } from "react";
 
-/** "Continue with Google". A plain link: the sign-in happens on Google, then returns to Zola. */
+/** A prepared link is reused for this long before a fresh one is fetched. */
+const FRESH_MS = 20 * 60 * 1000;
+
+/**
+ * "Continue with Google".
+ *
+ * The button links DIRECTLY to Google's sign-in address rather than to a Zola
+ * address that redirects there. That matters for the installed app on iPhone:
+ * Google blocks sign-in inside the app's own browser view, and only a direct
+ * link to Google makes the iPhone open it in a Safari view that Google accepts.
+ *
+ * The link is prepared in the background as soon as the button appears. If it
+ * isn't ready (or JavaScript is off) the button falls back to the redirecting
+ * address, which works in ordinary browsers.
+ */
 export default function GoogleButton({ role, label = "Continue with Google" }: { role?: string; label?: string }) {
-  const href = role ? `/api/auth/google?role=${encodeURIComponent(role)}` : "/api/auth/google";
+  const fallback = role ? `/api/auth/google?role=${encodeURIComponent(role)}` : "/api/auth/google";
+  const [direct, setDirect] = useState<{ url: string; role: string; at: number } | null>(null);
+  const queue  = useRef<Promise<void>>(Promise.resolve());
+  const wanted = useRef(role || "");
+
+  async function prepare(forRole: string): Promise<string | null> {
+    try {
+      const res = await fetch(`/api/auth/google?format=json${forRole ? `&role=${encodeURIComponent(forRole)}` : ""}`, { cache: "no-store" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return typeof data.url === "string" ? data.url : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Prepare the direct link, and again whenever buyer/seller changes. Requests run one
+  // after another so the link on the button always matches the latest one prepared.
+  useEffect(() => {
+    const forRole = role || "";
+    wanted.current = forRole;
+    queue.current = queue.current.then(async () => {
+      if (wanted.current !== forRole) return;       // a newer choice is already queued
+      const url = await prepare(forRole);
+      if (wanted.current === forRole) setDirect(url ? { url, role: forRole, at: Date.now() } : null);
+    });
+  }, [role]);
+
+  const ready = direct && direct.role === (role || "") && Date.now() - direct.at < FRESH_MS;
+
+  async function onClick(e: React.MouseEvent<HTMLAnchorElement>) {
+    if (ready) return;                 // a plain tap on a direct link to Google
+    // Not ready or gone stale: get a fresh link now, then follow it as a link
+    e.preventDefault();
+    const url = await prepare(role || "");
+    const a = document.createElement("a");
+    a.href = url || fallback;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   return (
-    <a href={href} className="btn btn-google btn-block">
+    <a href={ready ? direct!.url : fallback} onClick={onClick} className="btn btn-google btn-block" rel="noopener">
       <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
         <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
         <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />

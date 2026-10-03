@@ -6,7 +6,7 @@
  * Its only job is to show a friendly "You're offline" page when a page can't
  * be loaded because there is no connection.
  */
-const CACHE = "zola-offline-v1";
+const CACHE = "zola-offline-v2";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -26,6 +26,8 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   // Only full page loads; everything else is left completely alone
   if (event.request.mode !== "navigate") return;
+  // Never sit in the middle of sign-in or payment hand-offs
+  if (new URL(event.request.url).pathname.startsWith("/api/")) return;
   event.respondWith(
     fetch(event.request).catch(() => caches.match(OFFLINE_URL))
   );
