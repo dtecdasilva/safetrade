@@ -7,9 +7,8 @@ const DISMISS_KEY = "zola-install-dismissed";
 
 /**
  * Makes Zola installable as an app.
- *  - The app manifest (src/app/manifest.ts) is what makes it installable.
- *    There is deliberately no service worker: nothing sits between the
- *    browser and the server.
+ *  - Registers the service worker (live site only), which provides the
+ *    "You're offline" page.
  *  - On phones, offers to add Zola to the home screen. Android/Chrome gets an
  *    Install button; iPhone Safari gets the two taps to do it by hand, because
  *    iOS has no install prompt. Once dismissed or installed it stays away.
@@ -19,15 +18,8 @@ export default function PwaSetup() {
   const [mode, setMode] = useState<"hidden" | "android" | "ios">("hidden");
 
   useEffect(() => {
-    // Zola does not use a service worker. Remove the one an earlier version
-    // installed, because it interfered with signing in through Google.
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistrations()
-        .then((regs) => regs.forEach((r) => r.unregister()))
-        .catch(() => {});
-      if ("caches" in window) {
-        caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
-      }
+    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
 
     const installed =
