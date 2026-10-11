@@ -36,7 +36,7 @@ export default function CompleteProfilePage() {
       const res  = await fetch("/api/auth/google/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
-      router.push("/dashboard");
+      router.push(data.tradeId ? `/trade/${data.tradeId}` : "/dashboard");
       router.refresh();
     } catch { setError("Something went wrong. Check your connection and try again."); }
     finally { setLoading(false); }

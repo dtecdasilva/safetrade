@@ -19,14 +19,14 @@ const STEPS: { title: string; text: string; at: MoneyAt; note: string; held: boo
   },
   {
     title: "Seller delivers",
-    text: "The seller ships or delivers the agreed product or service.",
+    text: "The seller sends the item to Zola, and Zola delivers it. For a service, the seller completes the work.",
     at: "zola",
     note: "The money stays with Zola",
     held: true,
   },
   {
     title: "Zola releases the payment",
-    text: "Once the buyer confirms delivery, Zola releases the funds to the seller.",
+    text: "The buyer confirms delivery. After a 24-hour review, Zola releases the funds to the seller.",
     at: "seller",
     note: "The seller has the money",
     held: true,

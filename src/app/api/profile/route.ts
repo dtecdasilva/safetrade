@@ -14,6 +14,7 @@ function publicProfile(u: any) {
     email: u.email || "",
     phone: u.phone || "",
     role: u.role,
+    sells: u.sells || "",
     created_at: u.created_at || "",
     signed_up_with_google: u.auth_provider === "google",
     // People who signed up with Google have no password until they set one

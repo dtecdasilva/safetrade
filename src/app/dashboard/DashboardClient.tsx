@@ -158,7 +158,7 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
               {held.length === 0
                 ? "Nothing is being held right now."
                 : isVendor
-                  ? `Secured for ${plural(held.length, "order")}. Released to you when delivery is confirmed.`
+                  ? `Secured for ${plural(held.length, "order")}. Released to you after delivery is confirmed and reviewed.`
                   : `Protected across ${plural(held.length, "transaction")} until you confirm delivery.`}
             </p>
           </div>
@@ -198,13 +198,15 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
           </div>
         </div>
 
-        {/* Being released */}
+        {/* Under review after delivery was confirmed */}
         {pending > 0 && (
           <div className="notice notice-ok" style={{ marginBottom: 24 }}>
             <Clock size={16} />
             <span>
-              {plural(pending, "transaction")} delivered.{" "}
-              {isVendor ? "Zola is releasing your payment." : "Your payment is being sent to the seller."}
+              {plural(pending, "transaction")} under review.{" "}
+              {isVendor
+                ? "Zola releases your payment 24 hours after delivery is confirmed, if no problem is reported."
+                : "You have 24 hours after confirming to tell us if anything is wrong. Then the seller is paid."}
             </span>
           </div>
         )}

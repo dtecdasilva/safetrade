@@ -46,6 +46,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const txRef = result.transId || params.id;
     await db.collection("trades").doc(params.id).update({
       fapshi_ref: txRef,
+      // While a prompt is waiting on the buyer's phone, the seller can't change the transaction
+      payment_started_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
 

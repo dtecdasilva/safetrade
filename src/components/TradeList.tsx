@@ -50,7 +50,7 @@ export default function TradeList({
         <div className="notice notice-ok" style={{ marginBottom: 16 }}>
           <Clock size={16} />
           <span>
-            {pendingRelease} transaction{pendingRelease > 1 ? "s" : ""} delivered. Zola is releasing {pendingRelease > 1 ? "those payments" : "the payment"}.
+            {pendingRelease} transaction{pendingRelease > 1 ? "s" : ""} under review. Zola holds the payment for 24 hours after delivery is confirmed, then releases it.
           </span>
         </div>
       )}

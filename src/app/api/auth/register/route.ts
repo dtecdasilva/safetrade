@@ -4,11 +4,12 @@ import { randomUUID } from "crypto";
 import { getDb, initDb } from "@/lib/db";
 import { createToken, SessionUser } from "@/lib/auth";
 import { cleanPhone as normalizePhone, phoneInUse, PHONE_TAKEN } from "@/lib/users";
+import { claimInvitedTrades } from "@/lib/invites";
 
 export async function POST(req: NextRequest) {
   try {
     await initDb();
-    const { name, email, password, role, phone } = await req.json();
+    const { name, email, password, role, phone, sells, invite } = await req.json();
 
     if (!name || !email || !password || !role)
       return NextResponse.json({ error: "Please fill in all the fields" }, { status: 400 });
@@ -43,6 +44,8 @@ export async function POST(req: NextRequest) {
       role,
       avatar,
       phone:       cleanPhone,
+      // From the signup questions: "goods", "services" or "both" (sellers only)
+      ...(role === "vendor" && ["goods", "services", "both"].includes(sells) ? { sells } : {}),
       rating:      5.0,
       trade_count: 0,
       created_at:  new Date().toISOString(),
@@ -51,7 +54,10 @@ export async function POST(req: NextRequest) {
     const user: SessionUser = { id, email: email.toLowerCase(), name, role };
     const token = await createToken(user);
 
-    const res = NextResponse.json({ user, success: true });
+    // A seller may already have created a transaction for this person
+    const claimed = await claimInvitedTrades(db, { id, name, email: email.toLowerCase(), phone: cleanPhone, avatar, role }, invite);
+
+    const res = NextResponse.json({ user, success: true, tradeId: claimed[0] || null, waiting: claimed.length });
     res.cookies.set("st_token", token, {
       httpOnly: true, path: "/", maxAge: 60 * 60 * 24 * 7, sameSite: "lax",
     });

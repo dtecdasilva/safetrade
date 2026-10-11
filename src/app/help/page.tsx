@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
 import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
 import HowItWorks from "@/components/HowItWorks";
+import { SupportCard } from "@/components/Support";
+import { SUPPORT } from "@/lib/support";
 
 export const metadata: Metadata = { title: "Help" };
 
@@ -11,30 +13,33 @@ const FAQ: { q: string; a: string[] }[] = [
   {
     q: "Where is my money while a transaction is in progress?",
     a: [
-      "With Zola. When the buyer pays, the money goes to Zola and stays there. The seller can see that it has been paid, but it is only released after the buyer confirms delivery.",
+      "With Zola. When the buyer pays, the money goes to Zola and stays there. The seller can see that it has been paid, but it is only released after the buyer confirms delivery and the 24-hour review that follows.",
       "Every transaction page shows where the money is, what happens next, and who needs to act.",
     ],
   },
   {
     q: "How much does Zola cost?",
     a: [
-      "Zola charges 5% of the item price, plus FCFA 1,000 for delivery. Both are added to the buyer's total and shown before payment. The seller receives the full item price.",
-      "The delivery fee only applies when there is something to deliver. For a service, or anything the seller hands over themselves, the seller switches delivery off and only the 5% is added.",
+      "Zola charges 8% of the item price, or 5% when the item costs more than FCFA 50,000. Delivery is FCFA 1,000. Both are added to the buyer's total and shown before payment. The seller receives the full item price.",
+      "For example, a FCFA 30,000 item has a FCFA 2,400 fee, and a FCFA 100,000 item has a FCFA 5,000 fee.",
+      "The delivery fee only applies when there is something to deliver. For a service, or anything the seller hands over themselves, the seller switches delivery off and only the Zola fee is added.",
       "The FCFA 1,000 covers a standard delivery. If your item costs more than that to deliver, you will have to pay the difference.",
     ],
   },
   {
-    q: "How do I follow my delivery?",
+    q: "How does delivery work?",
     a: [
-      "Once you've paid, Zola takes you to the delivery tracking page for your order. You can come back to it any time from the Track delivery button on the transaction.",
-      "When the order arrives, return to the transaction on Zola and confirm delivery so the seller can be paid.",
+      "The seller does not send the item straight to the buyer. Once the buyer has paid, the seller sends the item to Zola, and Zola delivers it to the buyer.",
+      `The buyer pays for delivery, not the seller. To arrange the hand-over, sellers WhatsApp ${SUPPORT.whatsapp} or call ${SUPPORT.phone}.`,
+      "For services and anything else with nothing to deliver, the seller switches delivery off and simply marks the work as delivered.",
     ],
   },
   {
     q: "How do I start a transaction?",
     a: [
-      "The seller creates the transaction with the item, the price, the delivery time and the buyer's phone number. The buyer needs a Zola account registered with that number.",
-      "Zola then notifies the buyer, who reviews the details and pays.",
+      "The seller creates the transaction with the item, the price, the delivery time and the buyer's phone number.",
+      "If the buyer already has a Zola account with that number, Zola notifies them and they review the details and pay.",
+      "If the buyer isn't on Zola yet, the seller adds the buyer's email. Zola invites the buyer by email and WhatsApp to create an account, and the transaction is waiting for them when they do.",
     ],
   },
   {
@@ -46,7 +51,7 @@ const FAQ: { q: string; a: string[] }[] = [
   {
     q: "When does the seller get paid?",
     a: [
-      "After the buyer confirms delivery, Zola releases the payment to the seller's Zola wallet. From there the seller can withdraw to a mobile money number.",
+      "When the buyer confirms delivery, the transaction is under review for 24 hours. Zola checks with the buyer, and if no problem is reported the payment is released to the seller's Zola wallet. From there the seller can withdraw to a mobile money number.",
     ],
   },
   {
@@ -56,9 +61,23 @@ const FAQ: { q: string; a: string[] }[] = [
     ],
   },
   {
+    q: "I confirmed delivery, then found a problem. What now?",
+    a: [
+      "You have 24 hours after confirming. Open the transaction and choose Make a complaint, then tell us what went wrong. Your payment stays held, and Zola will call or text you.",
+      "Zola may also call or text you during those 24 hours just to check the order arrived as agreed.",
+      `After 24 hours the payment goes to the seller. If you still need help, WhatsApp ${SUPPORT.whatsapp} or call ${SUPPORT.phone}.`,
+    ],
+  },
+  {
+    q: "How do I reach customer service?",
+    a: [
+      `Message us on WhatsApp at ${SUPPORT.whatsapp}, or call ${SUPPORT.phone}. If it's about a transaction, have the transaction ID ready. You'll find it at the top of the transaction page.`,
+    ],
+  },
+  {
     q: "Can a transaction be changed or deleted?",
     a: [
-      "The seller can edit or delete a transaction until the buyer pays. After payment, the details are locked so both sides are working from the same agreement.",
+      "The seller can edit or delete a transaction until the buyer pays. Once the buyer has paid, it is locked and can't be changed, so both sides are working from the same agreement. It is also locked for a few minutes while a payment is in progress.",
     ],
   },
   {
@@ -82,6 +101,10 @@ export default async function HelpPage() {
           <p className="lead" style={{ marginTop: 8 }}>
             Zola protects both buyers and sellers by securely holding payment until the transaction is completed.
           </p>
+        </div>
+
+        <div style={{ maxWidth: 800, marginBottom: 44 }}>
+          <SupportCard />
         </div>
 
         <section aria-labelledby="how-title" style={{ marginBottom: 48 }}>

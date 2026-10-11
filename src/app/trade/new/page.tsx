@@ -1,12 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ShieldCheck, UserPlus } from "lucide-react";
 import { PageLoader, PhoneField } from "@/components/ui";
 import { money } from "@/lib/zola";
-import { quote, FEE_PERCENT_LABEL, DELIVERY_FEE, DELIVERY_NOTE } from "@/lib/fees";
+import { quote, feePercentLabel, DELIVERY_FEE, DELIVERY_NOTE } from "@/lib/fees";
+import { handoverHow } from "@/lib/handover";
 
 export default function NewTradePage() {
   const router = useRouter();
@@ -14,14 +15,24 @@ export default function NewTradePage() {
   const [form, setForm]   = useState({ title: "", description: "", amount: "", buyerPhone: "", deliveryDays: "7", needsDelivery: true });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // The buyer's number isn't on Zola yet: ask for their email and invite them
+  const [needEmail, setNeedEmail]   = useState(false);
+  const [buyerEmail, setBuyerEmail] = useState("");
+  const emailRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/auth/me").then(r => r.json()).then(d => {
       if (!d.user) { router.push("/auth/login"); return; }
       if (d.user.role !== "vendor") { router.push("/dashboard"); return; }
       setUser(d.user);
+      // Sellers who said at signup that they only sell services start with delivery off
+      fetch("/api/profile").then(r => r.json()).then(p => {
+        if (p.profile?.sells === "services") setForm(f => ({ ...f, needsDelivery: false }));
+      }).catch(() => {});
     });
   }, [router]);
+
+  useEffect(() => { if (needEmail) emailRef.current?.focus(); }, [needEmail]);
 
   const amount     = parseFloat(form.amount) || 0;
   const { fee, deliveryFee, total: buyerTotal } = quote(amount, form.needsDelivery);
@@ -30,9 +41,13 @@ export default function NewTradePage() {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      const res  = await fetch("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.title, description: form.description, amount, buyerPhone: form.buyerPhone, deliveryDays: parseInt(form.deliveryDays), needsDelivery: form.needsDelivery }) });
+      const res  = await fetch("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.title, description: form.description, amount, buyerPhone: form.buyerPhone, buyerEmail: needEmail ? buyerEmail : "", deliveryDays: parseInt(form.deliveryDays), needsDelivery: form.needsDelivery }) });
       const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
+      if (!res.ok) {
+        // Not an error: this buyer simply needs an invitation
+        if (data.code === "buyer_not_found") { setNeedEmail(true); return; }
+        setError(data.error); return;
+      }
       router.push(`/trade/${data.tradeId}`);
     } catch { setError("Something went wrong. Check your connection and try again."); }
     finally { setLoading(false); }
@@ -40,7 +55,7 @@ export default function NewTradePage() {
 
   if (!user) return <PageLoader />;
 
-  const valid = form.title && form.description.trim() && form.buyerPhone && amount > 0;
+  const valid = form.title && form.description.trim() && form.buyerPhone && amount > 0 && (!needEmail || buyerEmail.trim());
 
   return (
     <div className="page">
@@ -85,18 +100,40 @@ export default function NewTradePage() {
                   No, nothing to deliver
                 </button>
               </div>
-              <p className="hint">
-                {form.needsDelivery
-                  ? `${money(DELIVERY_FEE)} is added to the buyer's total for a standard delivery, and the buyer can track it after paying.`
-                  : "For services, digital items, or anything you hand over yourself. No delivery fee is added."}
-              </p>
+              {form.needsDelivery ? (
+                <div className="notice notice-info" style={{ marginTop: 4 }}>
+                  <ShieldCheck size={16} />
+                  <span>
+                    <strong style={{ color: "var(--navy)" }}>You send the item to Zola, not straight to the buyer.</strong>{" "}
+                    Zola delivers it. The buyer pays the {money(DELIVERY_FEE)} delivery, so it costs you nothing.
+                    Once the buyer has paid: {handoverHow()}
+                  </span>
+                </div>
+              ) : (
+                <p className="hint">For services, digital items, or anything you hand over yourself. No delivery fee is added.</p>
+              )}
             </div>
 
             <div className="field">
               <label className="label" htmlFor="buyerPhone">Buyer&apos;s phone number</label>
-              <PhoneField id="buyerPhone" value={form.buyerPhone} onChange={v => setForm(p => ({ ...p, buyerPhone: v }))} required />
-              <p className="hint">The buyer needs a Zola account registered with this number.</p>
+              <PhoneField id="buyerPhone" value={form.buyerPhone} onChange={v => { setForm(p => ({ ...p, buyerPhone: v })); setNeedEmail(false); }} required />
+              <p className="hint">Not on Zola yet? No problem. We&apos;ll ask for their email and invite them to sign up and pay.</p>
             </div>
+
+            {needEmail && (
+              <div className="invite-box fade-up" role="status">
+                <p className="invite-title"><UserPlus size={17} /> This buyer isn&apos;t on Zola yet</p>
+                <p className="hint" style={{ fontSize: 14, margin: "4px 0 12px" }}>
+                  Add their email. Zola creates the transaction and invites them by email and WhatsApp
+                  (<span className="num">+237 {form.buyerPhone}</span>) to sign up so they can pay.
+                </p>
+                <div className="field">
+                  <label className="label" htmlFor="buyerEmail">Buyer&apos;s email</label>
+                  <input id="buyerEmail" ref={emailRef} className="input" type="email" inputMode="email" autoComplete="off"
+                    placeholder="buyer@example.com" value={buyerEmail} onChange={e => setBuyerEmail(e.target.value)} required />
+                </div>
+              </div>
+            )}
 
             <div className="form-grid-2">
               <div className="field">
@@ -117,12 +154,15 @@ export default function NewTradePage() {
             <div className="card card-pad fade-up">
               <h2 className="section-title" style={{ marginBottom: 8 }}>Who pays what</h2>
               <div className="kv"><span>Item price</span><span>{money(amount)}</span></div>
-              <div className="kv"><span>Zola fee ({FEE_PERCENT_LABEL}), paid by the buyer</span><span>{money(fee)}</span></div>
+              <div className="kv"><span>Zola fee ({feePercentLabel(amount)}), paid by the buyer</span><span>{money(fee)}</span></div>
               {deliveryFee > 0 && <div className="kv"><span>Delivery, paid by the buyer</span><span>{money(deliveryFee)}</span></div>}
               <div className="kv kv-total"><span>Buyer pays</span><span>{money(buyerTotal)}</span></div>
               <div className="receipt-out" style={{ marginTop: 14 }}>
                 <span>You receive</span><strong>{money(amount)}</strong>
               </div>
+              <p className="hint" style={{ marginTop: 12 }}>
+                The buyer pays the Zola fee{deliveryFee > 0 ? " and delivery" : ""} on top of your price. Nothing is taken from what you receive.
+              </p>
               {deliveryFee > 0 && (
                 <p className="hint" style={{ marginTop: 12 }}>
                   {DELIVERY_NOTE.replace("your item costs", "the item costs").replace("you will have to pay", "the buyer pays")}
@@ -132,12 +172,12 @@ export default function NewTradePage() {
           )}
 
           <button type="submit" disabled={!valid || loading} className="btn btn-primary btn-lg btn-block">
-            {loading ? "Creating..." : "Create transaction and notify buyer"}
+            {loading ? "Creating..." : needEmail ? "Create transaction and invite buyer" : "Create transaction and notify buyer"}
           </button>
 
           <p className="protect" style={{ justifyContent: "center" }}>
             <ShieldCheck size={16} />
-            <span>You can edit or delete this transaction until the buyer pays.</span>
+            <span>You can edit or delete this transaction until the buyer pays. After that it is locked.</span>
           </p>
         </form>
       </main>

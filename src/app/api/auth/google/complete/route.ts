@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { getDb, initDb } from "@/lib/db";
 import { createToken, verifyTemp, SessionUser } from "@/lib/auth";
 import { phoneInUse, PHONE_TAKEN } from "@/lib/users";
+import { claimInvitedTrades } from "@/lib/invites";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +73,10 @@ export async function POST(req: NextRequest) {
     const user: SessionUser = { id, email: pending.email, name, role };
     const token = await createToken(user);
 
-    const res = NextResponse.json({ user, success: true });
+    // A seller may already have created a transaction for this person
+    const claimed = await claimInvitedTrades(db, { id, name, email: pending.email, phone: cleanPhone, avatar, role });
+
+    const res = NextResponse.json({ user, success: true, tradeId: claimed[0] || null, waiting: claimed.length });
     res.cookies.set("st_token", token, {
       httpOnly: true, path: "/", maxAge: 60 * 60 * 24 * 7, sameSite: "lax",
     });

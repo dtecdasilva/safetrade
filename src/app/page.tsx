@@ -68,7 +68,7 @@ export default async function Home() {
                 <h3 className="side-title">Your payment is protected by Zola until the transaction is completed.</h3>
                 <ul className="side-list">
                   <li><Check size={19} strokeWidth={2.5} /><span><strong>Pay Zola, not a stranger.</strong> The seller sees that you&apos;ve paid, but can&apos;t touch the money yet.</span></li>
-                  <li><Check size={19} strokeWidth={2.5} /><span><strong>Confirm when it arrives.</strong> The payment is released only after you confirm delivery.</span></li>
+                  <li><Check size={19} strokeWidth={2.5} /><span><strong>Confirm when it arrives.</strong> You then have 24 hours to tell us if anything is wrong before the seller is paid.</span></li>
                   <li><Check size={19} strokeWidth={2.5} /><span><strong>Something wrong?</strong> Open a dispute. Your payment stays held while Zola reviews it.</span></li>
                 </ul>
               </div>
@@ -91,14 +91,14 @@ export default async function Home() {
             <div>
               <h2 className="h2">The full cost, shown before you pay</h2>
               <p className="lead">
-                Zola charges 5% of the item price, plus FCFA 1,000 for delivery. Both are added to
-                the buyer&apos;s total and shown clearly before payment. The seller receives the full
-                price they asked for.
+                Zola charges 8% of the item price, or 5% when the item costs more than FCFA 50,000,
+                plus FCFA 1,000 for delivery. Both are added to the buyer&apos;s total and shown clearly
+                before payment. The seller receives the full price they asked for.
               </p>
               <p className="lead" style={{ fontSize: 15.5 }}>
-                The FCFA 1,000 covers a standard delivery. If your item costs more than that to
-                deliver, you will have to pay the difference. For services with nothing to deliver,
-                no delivery fee is added.
+                Sellers send the item to Zola and Zola delivers it. The FCFA 1,000 covers a standard
+                delivery. If your item costs more than that to deliver, you will have to pay the
+                difference. For services with nothing to deliver, no delivery fee is added.
               </p>
               <p className="lead" style={{ fontSize: 15.5, color: "var(--ink-3)" }}>
                 No service can remove every risk from buying and selling online. What Zola does is keep
@@ -107,11 +107,14 @@ export default async function Home() {
             </div>
             <div className="receipt" aria-label="Example of how the fee works">
               <p className="receipt-title">Example</p>
-              <div className="kv"><span>Item price</span><span>FCFA 100,000</span></div>
-              <div className="kv"><span>Zola fee (5%)</span><span>FCFA 5,000</span></div>
+              <div className="kv"><span>Item price</span><span>FCFA 30,000</span></div>
+              <div className="kv"><span>Zola fee (8%)</span><span>FCFA 2,400</span></div>
               <div className="kv"><span>Delivery</span><span>FCFA 1,000</span></div>
-              <div className="kv kv-total"><span>Buyer pays</span><span>FCFA 106,000</span></div>
-              <div className="receipt-out"><span>Seller receives</span><strong>FCFA 100,000</strong></div>
+              <div className="kv kv-total"><span>Buyer pays</span><span>FCFA 33,400</span></div>
+              <div className="receipt-out"><span>Seller receives</span><strong>FCFA 30,000</strong></div>
+              <p className="hint" style={{ marginTop: 12 }}>
+                Above FCFA 50,000 the fee is 5%: on a FCFA 100,000 item it is FCFA 5,000.
+              </p>
             </div>
           </div>
         </section>

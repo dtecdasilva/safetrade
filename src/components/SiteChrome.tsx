@@ -3,6 +3,7 @@ import Link from "next/link";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 import { BRAND } from "@/lib/zola";
+import { SUPPORT } from "@/lib/support";
 
 /** Header for signed-out pages (home, help). */
 export function SiteHeader() {
@@ -51,13 +52,18 @@ export function SiteFooter() {
             <Link href="/auth/register">Create account</Link>
             <Link href="/auth/forgot-password">Reset password</Link>
           </div>
+          <div className="footer-col">
+            <p className="footer-head">Customer service</p>
+            <a href={SUPPORT.whatsappUrl} target="_blank" rel="noopener noreferrer" className="footer-contact">WhatsApp {SUPPORT.whatsapp}</a>
+            <a href={SUPPORT.phoneUrl} className="footer-contact">Call {SUPPORT.phone}</a>
+          </div>
         </div>
         <div className="footer-base">
           <span style={{ display: "inline-flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
             <span>© {new Date().getFullYear()} Zola</span>
             <ThemeToggle variant="text" />
           </span>
-          <span>Payments are held by Zola until the buyer confirms delivery.</span>
+          <span>Payments are held by Zola until delivery is confirmed and reviewed.</span>
         </div>
       </div>
     </footer>

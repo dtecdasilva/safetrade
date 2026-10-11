@@ -1,3 +1,5 @@
+import { SUPPORT } from "@/lib/support";
+
 export interface EmailPayload {
   to: string;
   subject: string;
@@ -42,14 +44,23 @@ export async function sendEmail({ to, subject, text, html }: EmailPayload): Prom
 
   if (html) body.html = html;
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(process.env.RESEND_API_URL || "https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      // An email must never hold up a payment or a status change
+      signal: AbortSignal.timeout(6000),
+    });
+  } catch (e: any) {
+    const error = `Resend email failed: ${e?.name === "TimeoutError" ? "the email service took too long to answer" : e?.message || "network error"}`;
+    console.error(error);
+    return { success: false, error };
+  }
 
   if (!res.ok) {
     const errorText = await res.text();
@@ -111,7 +122,7 @@ export function emailLayout(opts: {
 <p style="margin:0;color:#334E68;font-size:15px;line-height:1.6;">${esc(opts.intro)}</p>
 ${table}${cta}${note}
 </td></tr>
-<tr><td style="padding:18px 4px 0;color:#627D98;font-size:13px;line-height:1.5;">Zola &mdash; Secure transactions. Simple payments.</td></tr>
+<tr><td style="padding:18px 4px 0;color:#627D98;font-size:13px;line-height:1.6;">Need help? WhatsApp <a href="${SUPPORT.whatsappUrl}" style="color:#087F5B;font-weight:600;text-decoration:none;">${esc(SUPPORT.whatsapp)}</a> or call <a href="${SUPPORT.phoneUrl}" style="color:#087F5B;font-weight:600;text-decoration:none;">${esc(SUPPORT.phone)}</a>.<br>Zola &mdash; Secure transactions. Simple payments.</td></tr>
 </table>
 </td></tr>
 </table>

@@ -3,9 +3,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { Search, X, ShieldCheck, CheckCircle, AlertTriangle, Trash2, Edit3, Banknote, Phone } from "lucide-react";
+import { Search, X, ShieldCheck, CheckCircle, AlertTriangle, Trash2, Edit3, Banknote, Phone, PhoneCall } from "lucide-react";
 import { PageLoader, Pill, StatusPill } from "@/components/ui";
 import { WITHDRAWAL_STATUS, brandText, fmtDate, fmtDateTime, money, roleLabel, shortId, statusMeta } from "@/lib/zola";
+import { reviewLabel, reviewState } from "@/lib/review";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -65,7 +66,11 @@ export default function AdminPage() {
   const filteredTrades = tq ? trades.filter(t => t.id?.toLowerCase().includes(tq) || t.title?.toLowerCase().includes(tq) || t.buyer_name?.toLowerCase().includes(tq) || t.vendor_name?.toLowerCase().includes(tq) || t.status?.toLowerCase().includes(tq) || statusMeta(t.status).label.toLowerCase().includes(tq) || String(t.amount).includes(tq)) : trades;
   const filteredUsers  = uq ? users.filter(u => u.name?.toLowerCase().includes(uq) || u.email?.toLowerCase().includes(uq) || u.role?.toLowerCase().includes(uq) || roleLabel(u.role).toLowerCase().includes(uq)) : users;
 
+  // After "Confirm delivery" a transaction is under review for 24 hours
   const pendingRelease  = trades.filter(t => t.status === "pending_release");
+  const complaints      = pendingRelease.filter(t => reviewState(t).complaintOpen);
+  const toContact       = pendingRelease.filter(t => { const r = reviewState(t); return !r.complaintOpen && !r.contacted && !!r.endsAt; });
+  const readyToRelease  = pendingRelease.filter(t => reviewState(t).canRelease);
   const disputed        = trades.filter(t => t.status === "disputed");
   const pendingW        = withdrawals.filter(w => w.status === "pending");
   const processedW      = withdrawals.filter(w => w.status !== "pending");
@@ -90,7 +95,7 @@ export default function AdminPage() {
         {/* Header */}
         <div style={{ marginBottom: 24 }}>
           <h1 className="page-title">Admin</h1>
-          <p className="page-sub">Release payments, send withdrawals and manage accounts.</p>
+          <p className="page-sub">Review deliveries, release payments, send withdrawals and manage accounts.</p>
         </div>
 
         {actionError && (
@@ -102,10 +107,22 @@ export default function AdminPage() {
         {/* Things that need the admin */}
         {needsAttention && (
           <div className="stack" style={{ gap: 10, marginBottom: 20 }}>
-            {pendingRelease.length > 0 && (
-              <div className="notice notice-wait">
+            {complaints.length > 0 && (
+              <div className="notice notice-danger">
                 <AlertTriangle size={16} />
-                <span>{pendingRelease.length} transaction{pendingRelease.length > 1 ? "s" : ""} delivered and waiting for you to release the payment.</span>
+                <span>{complaints.length} complaint{complaints.length > 1 ? "s" : ""} from {complaints.length > 1 ? "buyers" : "a buyer"} to settle. Call or text them, then mark {complaints.length > 1 ? "each one" : "it"} as resolved.</span>
+              </div>
+            )}
+            {toContact.length > 0 && (
+              <div className="notice notice-wait">
+                <PhoneCall size={16} />
+                <span>{toContact.length} buyer{toContact.length > 1 ? "s" : ""} to call or text. They confirmed delivery and {toContact.length > 1 ? "their transactions are" : "the transaction is"} under review.</span>
+              </div>
+            )}
+            {readyToRelease.length > 0 && (
+              <div className="notice notice-ok">
+                <ShieldCheck size={16} />
+                <span>{readyToRelease.length} payment{readyToRelease.length > 1 ? "s" : ""} reviewed and ready to release.</span>
               </div>
             )}
             {pendingW.length > 0 && (
@@ -134,7 +151,7 @@ export default function AdminPage() {
             <p className="stat-note">Paid by buyers and not yet released</p>
           </div>
           {[
-            { label: "Waiting for release", value: String(pendingRelease.length) },
+            { label: "Under review",        value: String(pendingRelease.length) },
             { label: "Disputed",            value: String(disputed.length) },
             { label: "Users",               value: String(users.length) },
           ].map((s) => (
@@ -181,13 +198,20 @@ export default function AdminPage() {
                       <td>{t.buyer_name || "—"}</td>
                       <td>{t.vendor_name || "—"}</td>
                       <td className="strong num" style={{ whiteSpace: "nowrap" }}>{money(t.amount)}</td>
-                      <td><StatusPill status={t.status} /></td>
                       <td>
-                        {t.status === "pending_release" && (
+                        <StatusPill status={t.status} />
+                        {t.status === "pending_release" && <p className="hint" style={{ marginTop: 4, whiteSpace: "nowrap" }} suppressHydrationWarning>{reviewLabel(t)}</p>}
+                      </td>
+                      <td>
+                        {t.status === "pending_release" && (reviewState(t).canRelease ? (
                           <button onClick={() => release(t.id)} disabled={releaseLoading === t.id} className="btn btn-primary btn-sm">
                             <ShieldCheck size={15} /> {releaseLoading === t.id ? "Releasing..." : "Release payment"}
                           </button>
-                        )}
+                        ) : (
+                          <Link href={`/trade/${t.id}`} className="btn btn-secondary btn-sm">
+                            {reviewState(t).complaintOpen ? "Settle complaint" : reviewState(t).contacted ? "View review" : "Call buyer"}
+                          </Link>
+                        ))}
                         {t.status === "disputed" && <Link href={`/trade/${t.id}`} style={{ fontSize: 13.5, fontWeight: 600, color: "var(--error-ink)" }}>Review</Link>}
                       </td>
                     </tr>

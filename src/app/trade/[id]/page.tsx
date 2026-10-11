@@ -3,11 +3,14 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { ArrowLeft, CheckCircle, AlertTriangle, Truck, ShieldCheck, RefreshCw, Edit3, Trash2, X, Save, MapPin } from "lucide-react";
+import { ArrowLeft, CheckCircle, AlertTriangle, Truck, ShieldCheck, RefreshCw, Edit3, Trash2, X, Save, Check, MessageSquareWarning, PhoneCall, Copy } from "lucide-react";
 import { MoneyRail, PageLoader, PhoneField, StatusPill, Steps, Timeline } from "@/components/ui";
-import { fmtDate, initials, money, shortId, statusMeta, statusStory, ViewerRole } from "@/lib/zola";
-import { quote, feePercentOf, FEE_PERCENT_LABEL, DELIVERY_NOTE } from "@/lib/fees";
-import { deliveryTrackingUrl } from "@/lib/delivery";
+import { fmtDate, fmtDateTime, initials, money, shortId, statusMeta, statusStory, ViewerRole } from "@/lib/zola";
+import { COMPLAINT_MAX, COMPLAINT_MIN, REVIEW_HOURS, reviewState, timeLeft } from "@/lib/review";
+import { ContactRow, SupportButtons, SupportLine } from "@/components/Support";
+import { handoverHow } from "@/lib/handover";
+import { prettyPhone } from "@/lib/support";
+import { quote, feePercentOf, feePercentLabel, DELIVERY_NOTE } from "@/lib/fees";
 
 const NETWORKS = [
   { id: "mtn",    label: "MTN MoMo" },
@@ -16,10 +19,10 @@ const NETWORKS = [
 
 const DELIVERY_STATUS: Record<string, string> = {
   pending_payment: "Starts once the buyer pays",
-  funds_held:      "Not shipped yet",
-  shipped:         "Shipped, waiting for the buyer to confirm",
+  funds_held:      "Waiting for the seller to send it to Zola",
+  shipped:         "With Zola for delivery",
   delivered:       "Delivery confirmed",
-  pending_release: "Delivery confirmed",
+  pending_release: "Confirmed by the buyer",
   complete:        "Delivery confirmed",
   disputed:        "On hold while Zola reviews",
   cancelled:       "Cancelled",
@@ -30,7 +33,7 @@ const PAYOUT_STATUS: Record<string, string> = {
   funds_held:      "Held by Zola until delivery is confirmed",
   shipped:         "Held by Zola until delivery is confirmed",
   delivered:       "Being released",
-  pending_release: "Being released",
+  pending_release: "Under review, then released",
   complete:        "Released to your wallet",
   disputed:        "On hold while Zola reviews",
   cancelled:       "Cancelled",
@@ -50,10 +53,19 @@ export default function TradePage() {
   const [phone, setPhone]     = useState("");
   const [network, setNetwork] = useState<"mtn"|"orange"|"">("");
   const [paymentSent, setPaymentSent] = useState(false);
-  const [toTracking, setToTracking]   = useState(false);
 
   // Notify
   const [notified, setNotified] = useState(false);
+  const [notifyMsg, setNotifyMsg] = useState("");
+  const [copied, setCopied]       = useState(false);
+
+  // Review after "Confirm delivery": the buyer's complaint, and the admin's steps
+  const [contacts, setContacts]         = useState<any>(null);
+  const [complaining, setComplaining]   = useState(false);
+  const [complaint, setComplaint]       = useState("");
+  const [contactNote, setContactNote]   = useState("");
+  const [resolveNote, setResolveNote]   = useState("");
+  const [now, setNow]                   = useState(() => Date.now());
 
   // Edit
   const [editing, setEditing]     = useState(false);
@@ -72,17 +84,16 @@ export default function TradePage() {
     const res = await fetch(`/api/trades/${id}`);
     if (!res.ok) { router.push("/dashboard"); return; }
     const data = await res.json();
-    setTrade(data.trade); setEvents(data.events || []); setLoading(false);
+    setTrade(data.trade); setEvents(data.events || []); setContacts(data.contacts || null); setLoading(false);
   }, [id, router]);
 
   useEffect(() => { load(); }, [load]);
 
-  // A moment after payment is confirmed, move the buyer on to delivery tracking
+  // Keep "time left in the review" honest while the page stays open
   useEffect(() => {
-    if (!toTracking) return;
-    const t = setTimeout(() => { window.location.assign(deliveryTrackingUrl(id)); }, 3500);
-    return () => clearTimeout(t);
-  }, [toTracking, id]);
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   // When a notification arrives (the other side paid, shipped, confirmed...), show the new status straight away
   useEffect(() => {
@@ -96,9 +107,28 @@ export default function TradePage() {
     try {
       const res  = await fetch(`/api/trades/${id}/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...extra }) });
       const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
+      if (!res.ok) { setError(data.error); return false; }
       await load();
-    } catch { setError("Something went wrong. Check your connection and try again."); }
+      return true;
+    } catch { setError("Something went wrong. Check your connection and try again."); return false; }
+    finally { setActing(false); }
+  }
+
+  async function sendComplaint() {
+    const ok = await act("complain", { reason: complaint });
+    if (ok) { setComplaining(false); setComplaint(""); }
+  }
+
+  // Admin: log the call or text, settle a complaint, release the payment
+  async function adminPost(url: string, body?: Record<string, any>) {
+    setActing(true); setError("");
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || "That didn't go through. Please try again."); return false; }
+      await load();
+      return true;
+    } catch { setError("Something went wrong. Check your connection and try again."); return false; }
     finally { setActing(false); }
   }
 
@@ -129,8 +159,6 @@ export default function TradePage() {
         if (d.trade?.status !== "pending_payment") {
           clearInterval(poll);
           await load();
-          // Paid: hand over to the delivery platform so the buyer can follow the order
-          if (d.trade?.status === "funds_held" && Number(d.trade?.delivery_fee) > 0) setToTracking(true);
         }
         if (attempts >= 36) clearInterval(poll); // stop after 3 mins
       }, 5000);
@@ -138,8 +166,20 @@ export default function TradePage() {
   }
 
   async function notify() {
-    const res = await fetch(`/api/trades/${id}/notify`, { method: "POST" });
-    if (res.ok) setNotified(true);
+    setNotifyMsg(""); setNotified(false);
+    const res  = await fetch(`/api/trades/${id}/notify`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setNotifyMsg(data.error || "The reminder could not be sent. Please try again."); return; }
+    if (data.invited && !data.emailSent && !data.whatsappSent) { setNotifyMsg("The invitation could not be sent. Check the buyer's email and number, or share the link with them yourself."); await load(); return; }
+    setNotified(true);
+    if (data.invited) await load();
+  }
+
+  // The seller can pass the invitation on themselves (SMS, another chat, in person)
+  async function copyInvite() {
+    const link = `${window.location.origin}/auth/register?invite=${id}`;
+    try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2500); }
+    catch { window.prompt("Copy this link and send it to the buyer", link); }
   }
 
   async function saveEdit() {
@@ -167,16 +207,23 @@ export default function TradePage() {
   const isBuyer  = user?.id === trade.buyer_id;
   const isVendor = user?.id === trade.vendor_id;
   const canEdit  = isVendor && trade.status === "pending_payment";
+  // The buyer has no Zola account yet and has been invited to sign up
+  const buyerPending = !!trade.buyer_pending;
+  const inviteEmail  = !!trade.buyer_invite_sent?.email;
+  const inviteWa     = !!trade.buyer_invite_sent?.whatsapp;
   const step     = s.step;
   const selNet   = NETWORKS.find(n => n.id === network);
   const canPay   = phone.length >= 8 && !!network;
   const editQuote = quote(Number(editForm.amount), editForm.needsDelivery);
   const deliveryFee = Number(trade.delivery_fee) || 0;
-  // Only transactions that paid for delivery have something to track
+  // Transactions with a delivery fee are goods to ship; the rest are services or hand-overs
   const hasDelivery = deliveryFee > 0;
 
   const viewer: ViewerRole = isBuyer ? "buyer" : isVendor ? "seller" : "admin";
-  const story   = statusStory(trade, viewer);
+  const story   = statusStory(trade, viewer, now);
+  const review  = reviewState(trade, now);
+  const reviewUntil = review.endsAt ? fmtDateTime(review.endsAt) : "";
+  const complaintLen = complaint.trim().length;
   const total   = Number(trade.buyer_total || trade.amount);
   const hasPaid = !["pending_payment", "cancelled"].includes(trade.status);
   const isHeld  = s.money === "zola";
@@ -251,9 +298,10 @@ export default function TradePage() {
         </h2>
         <p className="hint" style={{ margin: "2px 0 16px" }}>
           {trade.status === "shipped"
-            ? "Confirm only once you've received it and checked it. Zola then releases the payment to the seller."
-            : "The seller hasn't marked it as shipped yet. If it has already been handed to you, you can confirm now. Zola then releases the payment to the seller."}
-          {" "}If something is wrong, open a dispute and your payment stays held.
+            ? "Confirm only once you've received it and checked it."
+            : "The seller hasn't marked it as shipped yet. If it has already been handed to you, you can confirm now."}
+          {" "}After you confirm, you still have {REVIEW_HOURS} hours to tell us if anything is wrong before the seller is paid.
+          If it never arrived or isn&apos;t what was agreed, open a dispute instead and your payment stays held.
         </p>
         <div className="btn-row">
           <button onClick={() => act("confirm")} disabled={acting} className="btn btn-primary" style={{ flex: 1 }}>
@@ -268,14 +316,43 @@ export default function TradePage() {
   } else if (isVendor && trade.status === "pending_payment") {
     action = (
       <section className="card card-pad tx-action fade-up" aria-labelledby="wait-title">
-        <h2 id="wait-title" className="section-title">Waiting for the buyer to pay</h2>
-        <p className="hint" style={{ margin: "2px 0 14px" }}>
-          {trade.buyer_name} has been notified. Don&apos;t ship anything until Zola confirms the payment is held.
-        </p>
-        <button onClick={notify} className="btn btn-secondary">
-          <RefreshCw size={16} /> Send a reminder
-        </button>
-        {notified && <p role="status" style={{ fontSize: 14, color: "var(--emerald-press)", fontWeight: 600, marginTop: 10 }}>Reminder sent.</p>}
+        {buyerPending ? (
+          <>
+            <h2 id="wait-title" className="section-title">Waiting for the buyer to join Zola</h2>
+            <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
+              This buyer doesn&apos;t have a Zola account yet.{" "}
+              {inviteEmail && inviteWa
+                ? <>We invited them by email ({trade.buyer_email}) and WhatsApp (<span className="num">{prettyPhone(trade.buyer_phone)}</span>) to sign up so they can pay.</>
+                : inviteEmail
+                  ? <>We invited them by email ({trade.buyer_email}) to sign up so they can pay. The WhatsApp message to <span className="num">{prettyPhone(trade.buyer_phone)}</span> didn&apos;t go through, so share the link with them too.</>
+                  : inviteWa
+                    ? <>We invited them on WhatsApp (<span className="num">{prettyPhone(trade.buyer_phone)}</span>) to sign up so they can pay. The email to {trade.buyer_email} didn&apos;t go through.</>
+                    : <>Neither the email nor the WhatsApp invitation went through. Copy the link and send it to them yourself.</>}
+              {" "}Don&apos;t send anything until Zola confirms the payment is held.
+            </p>
+            <div className="btn-row">
+              <button onClick={notify} className="btn btn-secondary">
+                <RefreshCw size={16} /> Send the invitation again
+              </button>
+              <button onClick={copyInvite} className="btn btn-secondary">
+                <Copy size={16} /> {copied ? "Link copied" : "Copy invitation link"}
+              </button>
+            </div>
+            {notified && <p role="status" style={{ fontSize: 14, color: "var(--emerald-press)", fontWeight: 600, marginTop: 10 }}>Invitation sent again.</p>}
+          </>
+        ) : (
+          <>
+            <h2 id="wait-title" className="section-title">Waiting for the buyer to pay</h2>
+            <p className="hint" style={{ margin: "2px 0 14px" }}>
+              {trade.buyer_name} has been notified. Don&apos;t send anything until Zola confirms the payment is held.
+            </p>
+            <button onClick={notify} className="btn btn-secondary">
+              <RefreshCw size={16} /> Send a reminder
+            </button>
+            {notified && <p role="status" style={{ fontSize: 14, color: "var(--emerald-press)", fontWeight: 600, marginTop: 10 }}>Reminder sent.</p>}
+          </>
+        )}
+        {notifyMsg && <p role="alert" className="hint-error" style={{ marginTop: 10 }}>{notifyMsg}</p>}
       </section>
     );
   } else if (isVendor && trade.status === "funds_held") {
@@ -284,24 +361,227 @@ export default function TradePage() {
         <h2 id="ship-title" className="section-title">Payment has been secured</h2>
         <p style={{ fontSize: 14.5, margin: "2px 0 16px", color: "var(--emerald-press)" }}>
           {hasDelivery
-            ? "Complete the delivery to receive your funds. Once you've shipped or handed over the order, mark it as shipped."
+            ? <>Now <strong>send the item to Zola</strong>, not straight to the buyer. Zola delivers it, and the buyer has already paid for delivery. {handoverHow()} Once Zola has the item, mark it as sent.</>
             : "Complete the work to receive your funds. Once you've delivered what was agreed, mark it as delivered."}
         </p>
         <button onClick={() => act("ship", { trackingNumber: "" })} disabled={acting} className="btn btn-primary">
-          <Truck size={17} /> {acting ? "Marking..." : hasDelivery ? "Mark as shipped" : "Mark as delivered"}
+          <Truck size={17} /> {acting ? "Marking..." : hasDelivery ? "Mark as sent to Zola" : "Mark as delivered"}
         </button>
       </section>
     );
+  } else if (isBuyer && trade.status === "pending_release") {
+    /* The buyer confirmed delivery: 24 hours to say something is wrong */
+    action = (
+      <section className="card card-pad tx-action fade-up" aria-labelledby="review-title">
+        {review.complaintOpen ? (
+          <>
+            <h2 id="review-title" className="section-title">We&apos;ve received your complaint</h2>
+            <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
+              Zola is looking into it and will call or text you. The seller is not paid until it is settled.
+            </p>
+            <p className="said">{trade.complaint_text}</p>
+            <p className="said-meta" suppressHydrationWarning>Sent {fmtDateTime(trade.complaint_at)}</p>
+            <p className="hint" style={{ margin: "16px 0 10px", fontSize: 14 }}>Want to reach us sooner?</p>
+            <SupportButtons small />
+          </>
+        ) : review.complaintResolved ? (
+          <>
+            <h2 id="review-title" className="section-title">Your complaint has been resolved</h2>
+            <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
+              {review.windowOpen
+                ? `Zola closed your complaint. The seller is paid once the review ends on ${reviewUntil}.`
+                : "Zola closed your complaint and is releasing the payment to the seller."}
+            </p>
+            {trade.complaint_resolution && <p className="said">{trade.complaint_resolution}</p>}
+            <div style={{ marginTop: 14 }}><SupportLine lead="Still not right?" /></div>
+          </>
+        ) : review.canComplain ? (
+          !complaining ? (
+            <>
+              <h2 id="review-title" className="section-title">Is everything okay with your order?</h2>
+              <p className="hint" style={{ margin: "2px 0 16px", fontSize: 14 }}>
+                Thanks for confirming delivery. This transaction is under review until{" "}
+                <strong style={{ color: "var(--navy)" }} suppressHydrationWarning>{reviewUntil}</strong> ({timeLeft(review.msLeft)} left).
+                If anything is wrong, make a complaint before then and your payment stays held. Zola may call or text you to check.
+              </p>
+              <button onClick={() => { setComplaining(true); setError(""); }} className="btn btn-secondary">
+                <MessageSquareWarning size={17} /> Make a complaint
+              </button>
+            </>
+          ) : (
+            <>
+              <h2 id="review-title" className="section-title">Make a complaint</h2>
+              <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
+                Tell us what went wrong. Your payment stays held, and Zola will call or text you.
+              </p>
+              <div className="field" style={{ marginBottom: 14 }}>
+                <label className="label" htmlFor="complaint">What went wrong?</label>
+                <textarea id="complaint" className="textarea" rows={4} maxLength={COMPLAINT_MAX} autoFocus
+                  placeholder="For example: the screen is cracked, or one item is missing from the box"
+                  value={complaint} onChange={e => setComplaint(e.target.value)} />
+                <p className="hint">{complaintLen < COMPLAINT_MIN ? "A sentence or two is enough." : `${complaintLen} of ${COMPLAINT_MAX} characters`}</p>
+              </div>
+              <div className="btn-row">
+                <button onClick={sendComplaint} disabled={acting || complaintLen < COMPLAINT_MIN} className="btn btn-primary" style={{ flex: 1 }}>
+                  {acting ? "Sending..." : "Send complaint"}
+                </button>
+                <button onClick={() => setComplaining(false)} disabled={acting} className="btn btn-secondary">Cancel</button>
+              </div>
+            </>
+          )
+        ) : (
+          <>
+            <h2 id="review-title" className="section-title">The review is over</h2>
+            <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
+              The {REVIEW_HOURS} hours for making a complaint have passed, and Zola is releasing the payment to the seller.
+            </p>
+            <SupportLine lead="Something still wrong?" />
+          </>
+        )}
+      </section>
+    );
+  } else if (isVendor && trade.status === "pending_release") {
+    action = (
+      <section className={`card card-pad tx-action fade-up${review.complaintOpen ? " card-wait" : ""}`} aria-labelledby="review-title">
+        {review.complaintOpen ? (
+          <>
+            <h2 id="review-title" className="section-title">The buyer reported a problem</h2>
+            <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
+              Your payment stays held while Zola looks into it. We may call or text you to hear your side.
+            </p>
+            <p className="said">{trade.complaint_text}</p>
+            <p className="said-meta" suppressHydrationWarning>Sent {fmtDateTime(trade.complaint_at)}</p>
+            <p className="hint" style={{ margin: "16px 0 10px", fontSize: 14 }}>You can also reach us directly.</p>
+            <SupportButtons small />
+          </>
+        ) : review.windowOpen ? (
+          <>
+            <h2 id="review-title" className="section-title">Delivery confirmed, now under review</h2>
+            <p className="hint" style={{ margin: "2px 0 0", fontSize: 14 }}>
+              {trade.buyer_name} confirmed delivery. Zola reviews every delivery for {REVIEW_HOURS} hours and checks with the buyer.
+              If no problem is reported, your {money(trade.amount)} is released after{" "}
+              <strong style={{ color: "var(--navy)" }} suppressHydrationWarning>{reviewUntil}</strong>.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 id="review-title" className="section-title">The review is over</h2>
+            <p className="hint" style={{ margin: "2px 0 0", fontSize: 14 }}>
+              Zola is releasing your {money(trade.amount)}. You&apos;ll be notified when it reaches your wallet.
+            </p>
+          </>
+        )}
+      </section>
+    );
   } else if (isAdmin && trade.status === "pending_release") {
+    /* Admin: call or text the buyer, settle any complaint, then release */
+    const buyerContact = contacts?.buyer || { name: trade.buyer_name, phone: trade.buyer_phone, email: trade.buyer_email };
     action = (
       <section className="card card-pad card-wait tx-action fade-up" aria-labelledby="release-title">
-        <h2 id="release-title" className="section-title">Release this payment</h2>
-        <p className="hint" style={{ margin: "2px 0 16px" }}>
-          The buyer confirmed delivery. Release {money(trade.amount)} to {trade.vendor_name}.
+        <h2 id="release-title" className="section-title">Review this delivery</h2>
+        <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }} suppressHydrationWarning>
+          {trade.buyer_name} confirmed delivery{trade.confirmed_at ? ` on ${fmtDateTime(trade.confirmed_at)}` : ""}.
+          {" "}Three things have to be true before {money(trade.amount)} goes to {trade.vendor_name}.
         </p>
-        <button onClick={async () => { setActing(true); await fetch(`/api/admin/release/${id}`, { method: "POST" }); await load(); setActing(false); }} disabled={acting} className="btn btn-primary">
-          <ShieldCheck size={17} /> {acting ? "Releasing..." : "Release payment"}
+
+        <ol className="checks">
+          {/* 1. Call or text the buyer */}
+          <li className={`check${review.contacted ? " is-done" : ""}`}>
+            <span className="check-mark" aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
+            <div style={{ minWidth: 0 }}>
+              <p className="check-title">Call or text the buyer</p>
+              <p className="check-text" suppressHydrationWarning>
+                {review.contacted
+                  ? `Done${trade.review_contacted_by ? ` by ${trade.review_contacted_by}` : ""} on ${fmtDateTime(trade.review_contacted_at)}.${trade.review_contact_note ? ` Note: ${trade.review_contact_note}` : ""}`
+                  : "Check the order arrived and is what was agreed."}
+              </p>
+              <div className="check-body">
+                <ContactRow role="Buyer" name={buyerContact.name} phone={buyerContact.phone} />
+                {!review.contacted && (
+                  <>
+                    <div className="field">
+                      <label className="label" htmlFor="contact-note">What did the buyer say? (optional)</label>
+                      <input id="contact-note" className="input" maxLength={500} value={contactNote}
+                        placeholder="For example: received it, all good" onChange={e => setContactNote(e.target.value)} />
+                    </div>
+                    <div>
+                      <button disabled={acting} className="btn btn-secondary"
+                        onClick={async () => { if (await adminPost(`/api/admin/review/${id}`, { action: "contacted", note: contactNote })) setContactNote(""); }}>
+                        <PhoneCall size={16} /> Mark buyer as contacted
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </li>
+
+          {/* 2. Complaint */}
+          <li className={`check${review.complaintOpen ? " is-bad" : " is-done"}`}>
+            <span className="check-mark" aria-hidden="true">{!review.complaintOpen && <Check size={14} strokeWidth={3} />}</span>
+            <div style={{ minWidth: 0 }}>
+              <p className="check-title">
+                {review.complaintOpen ? "Settle the buyer's complaint" : review.complaintResolved ? "Complaint resolved" : "No complaint"}
+              </p>
+              {!review.hasComplaint && (
+                <p className="check-text">
+                  {review.windowOpen ? "The buyer hasn't reported a problem. They can until the review ends." : "The buyer didn't report a problem."}
+                </p>
+              )}
+              {review.hasComplaint && (
+                <div className="check-body">
+                  <div>
+                    <p className="said">{trade.complaint_text}</p>
+                    <p className="said-meta" suppressHydrationWarning>{trade.buyer_name}, {fmtDateTime(trade.complaint_at)}</p>
+                  </div>
+                  {review.complaintResolved && (
+                    <p className="check-text" suppressHydrationWarning>
+                      Resolved{trade.complaint_resolved_by ? ` by ${trade.complaint_resolved_by}` : ""} on {fmtDateTime(trade.complaint_resolved_at)}. Note: {trade.complaint_resolution}
+                    </p>
+                  )}
+                  {review.complaintOpen && (
+                    <>
+                      <div className="field">
+                        <label className="label" htmlFor="resolve-note">How was it settled?</label>
+                        <textarea id="resolve-note" className="textarea" rows={2} maxLength={500} value={resolveNote}
+                          placeholder="The buyer and seller both see this note" onChange={e => setResolveNote(e.target.value)} />
+                      </div>
+                      <div>
+                        <button disabled={acting || !resolveNote.trim()} className="btn btn-secondary"
+                          onClick={async () => { if (await adminPost(`/api/admin/review/${id}`, { action: "resolve", note: resolveNote })) setResolveNote(""); }}>
+                          <CheckCircle size={16} /> Mark complaint as resolved
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </li>
+
+          {/* 3. The 24 hours */}
+          <li className={`check${review.windowOpen ? "" : " is-done"}`}>
+            <span className="check-mark" aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
+            <div style={{ minWidth: 0 }}>
+              <p className="check-title">{REVIEW_HOURS}-hour review</p>
+              <p className="check-text" suppressHydrationWarning>
+                {review.windowOpen
+                  ? `Ends ${reviewUntil}, ${timeLeft(review.msLeft)} left.`
+                  : reviewUntil ? `Ended ${reviewUntil}.` : "Confirmed before reviews were introduced, so there is nothing to wait for."}
+              </p>
+            </div>
+          </li>
+        </ol>
+
+        <button disabled={acting || !review.canRelease} className="btn btn-primary" style={{ marginTop: 8 }}
+          onClick={() => adminPost(`/api/admin/release/${id}`)}>
+          <ShieldCheck size={17} /> {acting ? "Working..." : `Release ${money(trade.amount)}`}
         </button>
+        {!review.canRelease && (
+          <ul className="blockers" aria-label="Before you can release">
+            {review.blockers.map(b => <li key={b}>{b}</li>)}
+          </ul>
+        )}
       </section>
     );
   }
@@ -387,7 +667,7 @@ export default function TradePage() {
               </div>
               {Number(editForm.amount) > 0 && (
                 <div className="kv" style={{ padding: "10px 14px", background: "var(--bg)", borderRadius: "var(--r-md)" }}>
-                  <span>Buyer pays, including the {FEE_PERCENT_LABEL} Zola fee{editQuote.deliveryFee > 0 ? ` and ${money(editQuote.deliveryFee)} delivery` : ""}</span>
+                  <span>Buyer pays, including the {feePercentLabel(Number(editForm.amount))} Zola fee{editQuote.deliveryFee > 0 ? ` and ${money(editQuote.deliveryFee)} delivery` : ""}</span>
                   <span>{money(editQuote.total)}</span>
                 </div>
               )}
@@ -398,17 +678,6 @@ export default function TradePage() {
                 <button onClick={() => setEditing(false)} className="btn btn-secondary">Cancel</button>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Paid: on the way to delivery tracking */}
-        {toTracking && (
-          <div className="notice notice-ok fade-up" role="status" style={{ marginBottom: 16 }}>
-            <CheckCircle size={16} />
-            <span>
-              Payment received. Zola is holding it safely. Taking you to delivery tracking...{" "}
-              <button type="button" className="link-btn" style={{ color: "inherit", textDecoration: "underline" }} onClick={() => setToTracking(false)}>Stay here</button>
-            </span>
           </div>
         )}
 
@@ -499,7 +768,9 @@ export default function TradePage() {
               <hr className="divider" />
 
               {[
-                { role: "Buyer",  name: trade.buyer_name,  avatar: trade.buyer_avatar,  you: isBuyer },
+                buyerPending
+                  ? { role: "Buyer, invited, not on Zola yet", name: prettyPhone(trade.buyer_phone), avatar: "?", you: false }
+                  : { role: "Buyer", name: trade.buyer_name, avatar: trade.buyer_avatar, you: isBuyer },
                 { role: "Seller", name: trade.vendor_name, avatar: trade.vendor_avatar, you: isVendor },
               ].map(p => (
                 <div key={p.role} className="party">
@@ -522,15 +793,21 @@ export default function TradePage() {
                   : null}
               {trade.tracking_number && <div className="kv"><span>Tracking number</span><span>{trade.tracking_number}</span></div>}
               {trade.created_at && <div className="kv"><span>Created</span><span suppressHydrationWarning>{fmtDate(trade.created_at)}</span></div>}
-              {hasPaid && hasDelivery && (
-                <a href={deliveryTrackingUrl(trade.id)} className="btn btn-secondary btn-block" style={{ marginTop: 12 }}>
-                  <MapPin size={16} /> Track delivery
-                </a>
-              )}
               {deliveryFee > 0 && !isVendor && !["complete", "cancelled"].includes(trade.status) && (
                 <p className="hint" style={{ marginTop: 10 }}>{DELIVERY_NOTE}</p>
               )}
             </section>
+
+            {isAdmin && (
+              <section className="card card-pad fade-up" aria-labelledby="contacts-title">
+                <h2 id="contacts-title" className="section-title" style={{ marginBottom: 2 }}>Contact</h2>
+                {/* During a review the buyer's details already sit next to "Call or text the buyer" */}
+                {trade.status !== "pending_release" && (
+                  <ContactRow role="Buyer" name={contacts?.buyer?.name || trade.buyer_name} phone={contacts?.buyer?.phone || trade.buyer_phone} email={contacts?.buyer?.email || trade.buyer_email} />
+                )}
+                <ContactRow role="Seller" name={contacts?.seller?.name || trade.vendor_name} phone={contacts?.seller?.phone}                      email={contacts?.seller?.email || trade.vendor_email} />
+              </section>
+            )}
 
             {isBuyer && !["complete", "cancelled"].includes(trade.status) && (
               <p className="protect" style={{ padding: "0 4px" }}>
@@ -541,9 +818,10 @@ export default function TradePage() {
             {isVendor && isHeld && trade.status !== "disputed" && (
               <p className="protect" style={{ padding: "0 4px" }}>
                 <ShieldCheck size={17} />
-                <span>The buyer&apos;s payment is held by Zola. It is released to you once delivery is confirmed.</span>
+                <span>The buyer&apos;s payment is held by Zola. It is released to you after delivery is confirmed and the {REVIEW_HOURS}-hour review.</span>
               </p>
             )}
+            {!isAdmin && <div style={{ padding: "0 4px" }}><SupportLine /></div>}
           </aside>
         </div>
       </main>

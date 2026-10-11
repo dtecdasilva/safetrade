@@ -4,6 +4,8 @@
  * Nothing here changes how transactions work; it only decides how they read.
  */
 
+import { ReviewFields, reviewState, timeLeft } from "@/lib/review";
+
 export const BRAND = {
   name: "Zola",
   tagline: "Secure transactions. Simple payments.",
@@ -31,14 +33,15 @@ export const STATUS: Record<string, StatusMeta> = {
   funds_held:      { label: "Paid",            tone: "ok",     step: 2, money: "zola"   },
   shipped:         { label: "Shipped",         tone: "info",   step: 3, money: "zola"   },
   delivered:       { label: "Delivered",       tone: "ok",     step: 4, money: "zola"   },
-  pending_release: { label: "Delivered",       tone: "ok",     step: 4, money: "zola"   },
+  // Delivery confirmed by the buyer: 24-hour review before the payment is released
+  pending_release: { label: "Under review",    tone: "wait",   step: 4, money: "zola"   },
   complete:        { label: "Completed",       tone: "done",   step: 5, money: "seller" },
   disputed:        { label: "Disputed",        tone: "danger", step: 0, money: "zola"   },
   cancelled:       { label: "Cancelled",       tone: "muted",  step: 0, money: "none"   },
   refunded:        { label: "Refunded",        tone: "muted",  step: 0, money: "buyer"  },
 };
 
-export const STEPS = ["Payment", "Held by Zola", "Shipped", "Delivered", "Completed"];
+export const STEPS = ["Payment", "Held by Zola", "Shipped", "Review", "Completed"];
 
 export function statusMeta(status: string): StatusMeta {
   return STATUS[status] || STATUS.cancelled;
@@ -131,8 +134,9 @@ export interface StatusStory {
  * must answer: where the money is, what happens next, and who acts.
  */
 export function statusStory(
-  trade: { status: string; amount: number; buyer_total?: number; buyer_name?: string; vendor_name?: string; needs_delivery?: boolean },
-  viewer: ViewerRole
+  trade: { status: string; amount: number; buyer_total?: number; buyer_name?: string; vendor_name?: string; needs_delivery?: boolean; delivery_fee?: number; buyer_pending?: boolean } & ReviewFields,
+  viewer: ViewerRole,
+  now: number = Date.now()
 ): StatusStory {
   const held  = money(trade.amount);
   const total = money(trade.buyer_total || trade.amount);
@@ -141,9 +145,22 @@ export function statusStory(
   const isBuyer  = viewer === "buyer";
   const isSeller = viewer === "seller";
   const isAdmin  = viewer === "admin";
+  // Goods go to Zola for delivery; services have nothing to deliver
+  const goods = trade.needs_delivery !== undefined ? trade.needs_delivery !== false : Number(trade.delivery_fee) > 0;
 
   switch (trade.status) {
     case "pending_payment":
+      // The buyer was invited and has not created their account yet
+      if (trade.buyer_pending) {
+        return {
+          where: "The buyer hasn't joined Zola yet, so no money has moved.",
+          next: isSeller
+            ? "The buyer creates a Zola account from the invitation we sent, then pays. We'll tell you as soon as they join."
+            : "The buyer creates a Zola account from the invitation, then pays.",
+          who: "The buyer",
+          yourMove: false,
+        };
+      }
       return {
         where: isBuyer ? "You haven't paid yet, so no money has moved." : "The buyer hasn't paid yet, so no money has moved.",
         next: isBuyer
@@ -156,10 +173,10 @@ export function statusStory(
       return {
         where: isBuyer ? "Your payment is safely held by Zola." : `${held} is safely held by Zola.`,
         next: isBuyer
-          ? "The seller needs to ship your order."
+          ? (goods ? "The seller sends your order to Zola, and Zola delivers it to you." : "The seller needs to complete what you agreed.")
           : isSeller
-            ? (trade.needs_delivery === false ? "Complete the work, then mark it as delivered." : "Deliver the order, then mark it as shipped.")
-            : "The seller needs to deliver the order.",
+            ? (goods ? "Send the item to Zola for delivery, then mark it as sent." : "Complete the work, then mark it as delivered.")
+            : (goods ? "The seller sends the item to Zola. Then Zola delivers it to the buyer." : "The seller needs to complete the work."),
         who: isSeller ? "You" : seller,
         yourMove: isSeller,
       };
@@ -167,25 +184,69 @@ export function statusStory(
       return {
         where: isBuyer ? "Your payment is safely held by Zola." : `${held} is safely held by Zola.`,
         next: isBuyer
-          ? "Confirm delivery once your order arrives. Zola then releases the payment to the seller."
+          ? "Confirm delivery once your order arrives. You then have 24 hours to tell us if anything is wrong before the seller is paid."
           : isSeller
-            ? "Your order is on its way. Once the buyer confirms delivery, Zola releases your payment."
-            : "The buyer confirms delivery once the order arrives.",
+            ? (goods
+                ? "Zola is delivering your item. Once the buyer confirms delivery, Zola reviews it for 24 hours and then releases your payment."
+                : "Once the buyer confirms delivery, Zola reviews it for 24 hours and then releases your payment.")
+            : (goods ? "Deliver the item to the buyer. The buyer confirms once it arrives." : "The buyer confirms delivery once the work is done."),
         who: isBuyer ? "You" : buyer,
         yourMove: isBuyer,
       };
     case "delivered":
-    case "pending_release":
+    case "pending_release": {
+      const r = reviewState(trade, now);
+      const until = r.endsAt ? fmtDateTime(r.endsAt) : "";
+      const where = isBuyer
+        ? "Your payment is still held by Zola while this transaction is under review."
+        : isSeller
+          ? "Zola is still holding your payment while this transaction is under review."
+          : `${held} is held by Zola while this transaction is under review.`;
+
+      // The buyer said something is wrong
+      if (r.complaintOpen) {
+        return {
+          where,
+          next: isBuyer
+            ? "Zola is looking into your complaint and will call or text you. The seller is not paid until it is settled."
+            : isSeller
+              ? "The buyer reported a problem with this order. Your payment stays held while Zola looks into it. We may call or text you."
+              : "Call or text the buyer about their complaint, settle it, then mark it as resolved.",
+          who: isAdmin ? "You" : "Zola",
+          yourMove: isAdmin,
+        };
+      }
+
+      // Still inside the 24 hours
+      if (r.windowOpen) {
+        return {
+          where,
+          next: isBuyer
+            ? `You have until ${until} to tell us if something is wrong. Zola may call or text you to check. After that, the seller is paid.`
+            : isSeller
+              ? `The buyer confirmed delivery. Zola checks with the buyer and releases your payment after ${until}.`
+              : r.contacted
+                ? `The buyer has been contacted. You can release ${held} to ${seller} after ${until} (${timeLeft(r.msLeft)} left).`
+                : `Call or text the buyer to check the order arrived as agreed. You can release ${held} to ${seller} after ${until}.`,
+          who: isAdmin ? "You" : "Zola",
+          yourMove: isAdmin && !r.contacted,
+        };
+      }
+
+      // Review over (or a transaction confirmed before reviews existed)
       return {
         where: isSeller ? "Zola is holding your payment and getting it ready for release." : `${held} is with Zola, ready to be released.`,
         next: isBuyer
-          ? "Your payment is being sent to the seller."
+          ? "The review is over. Your payment is being sent to the seller."
           : isSeller
-            ? "Your payment is being released to you."
-            : `Release ${held} to ${seller}.`,
+            ? "The review is over. Your payment is being released to you."
+            : r.canRelease
+              ? `The review is over. Release ${held} to ${seller}.`
+              : `Call or text the buyer, mark them as contacted, then release ${held} to ${seller}.`,
         who: isAdmin ? "You" : "Zola",
         yourMove: isAdmin,
       };
+    }
     case "complete":
       return {
         where: isSeller ? `${held} has been released to you.` : `${held} has been released to the seller.`,

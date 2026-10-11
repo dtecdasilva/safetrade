@@ -4,6 +4,17 @@ import { getSession } from "@/lib/auth";
 import { notifyTradeMove } from "@/lib/notifications";
 import { quote } from "@/lib/fees";
 
+/** Once the buyer has paid, the agreement is fixed for both sides. */
+const PAID_LOCK = "The buyer has already paid, so this transaction can no longer be changed. If something needs fixing, contact Zola customer service.";
+const PAYING_LOCK = "The buyer is paying for this right now, so it can't be changed. Try again in a few minutes.";
+const PAYMENT_WINDOW_MINUTES = 10;
+
+/** A payment prompt was sent to the buyer's phone in the last few minutes. */
+function paymentInProgress(trade: any): boolean {
+  const started = trade.payment_started_at ? Date.parse(trade.payment_started_at) : NaN;
+  return !isNaN(started) && Date.now() - started < PAYMENT_WINDOW_MINUTES * 60000;
+}
+
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getSession();
@@ -51,7 +62,27 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       events = [];
     }
 
-    return NextResponse.json({ trade, events });
+    // Step 3: admins get the buyer's and seller's contact details, so they can
+    // call or text during a review, complaint or dispute
+    let contacts: any = undefined;
+    if (session.role === "admin") {
+      try {
+        const [buyerDoc, vendorDoc] = await Promise.all([
+          db.collection("users").doc(trade.buyer_id).get(),
+          db.collection("users").doc(trade.vendor_id).get(),
+        ]);
+        const b = buyerDoc.data()  || {};
+        const v = vendorDoc.data() || {};
+        contacts = {
+          buyer:  { name: b.name || trade.buyer_name,  phone: b.phone || trade.buyer_phone || "", email: b.email || trade.buyer_email  || "" },
+          seller: { name: v.name || trade.vendor_name, phone: v.phone || "",                      email: v.email || trade.vendor_email || "" },
+        };
+      } catch (e: any) {
+        console.error("[trade GET] failed to fetch contacts:", e.message);
+      }
+    }
+
+    return NextResponse.json({ trade, events, contacts });
   } catch (e: any) {
     console.error("[trade GET] unexpected error:", e.message, e.stack);
     return NextResponse.json({ error: e.message }, { status: 500 });
@@ -72,7 +103,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (trade.vendor_id !== session.id)
       return NextResponse.json({ error: "Only the seller can edit this transaction" }, { status: 403 });
     if (trade.status !== "pending_payment")
-      return NextResponse.json({ error: "A transaction can only be edited before the buyer pays" }, { status: 400 });
+      return NextResponse.json({ error: PAID_LOCK }, { status: 400 });
+    if (paymentInProgress(trade))
+      return NextResponse.json({ error: PAYING_LOCK }, { status: 409 });
 
     const { title, description, amount, deliveryDays, needsDelivery } = await req.json();
     if (!title || !description || !amount)
@@ -118,7 +151,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     if (trade.vendor_id !== session.id)
       return NextResponse.json({ error: "Only the seller can delete this transaction" }, { status: 403 });
     if (trade.status !== "pending_payment")
-      return NextResponse.json({ error: "A transaction can only be deleted before the buyer pays" }, { status: 400 });
+      return NextResponse.json({ error: PAID_LOCK.replace("changed", "deleted") }, { status: 400 });
+    if (paymentInProgress(trade))
+      return NextResponse.json({ error: PAYING_LOCK }, { status: 409 });
 
     // Delete trade and its events
     await db.collection("trades").doc(params.id).delete();

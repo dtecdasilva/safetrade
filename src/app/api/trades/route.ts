@@ -4,7 +4,9 @@ import { getDb, initDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { sendEmail, emailLayout } from "@/lib/mail";
 import { notifyTradeMove } from "@/lib/notifications";
-import { quote, FEE_PERCENT_LABEL, DELIVERY_NOTE } from "@/lib/fees";
+import { quote, feePercentLabel, DELIVERY_NOTE } from "@/lib/fees";
+import { cleanPhone as normalizePhone, cleanEmail, isEmail } from "@/lib/users";
+import { INVITED_BUYER_NAME, invitedBuyerId, inviteSummary, sendBuyerInvite } from "@/lib/invites";
 import {
   notifyBuyerTradeCreated,
   notifyAdminTradeCreated,
@@ -45,14 +47,21 @@ export async function POST(req: NextRequest) {
     if (session.role !== "vendor")
       return NextResponse.json({ error: "Only seller accounts can create transactions" }, { status: 403 });
 
-    const { title, description, amount, buyerPhone, deliveryDays, needsDelivery } = await req.json();
+    const { title, description, amount, buyerPhone, buyerEmail, deliveryDays, needsDelivery } = await req.json();
     if (!title || !description || !amount || !buyerPhone)
       return NextResponse.json({ error: "Please fill in the item, description, price and the buyer's phone number" }, { status: 400 });
 
     // Clean phone — strip +237 prefix and non-digits
-    const cleanPhone = buyerPhone.replace(/\D/g, "").replace(/^237/, "");
+    const cleanPhone = normalizePhone(buyerPhone);
+    if (cleanPhone.length < 8)
+      return NextResponse.json({ error: "Enter the buyer's full phone number" }, { status: 400 });
 
     const db = getDb();
+
+    const vendorDoc = await db.collection("users").doc(session.id).get();
+    const vendor    = vendorDoc.data()!;
+    if (vendor.phone && vendor.phone === cleanPhone)
+      return NextResponse.json({ error: "That's your own number. Enter the buyer's phone number." }, { status: 400 });
 
     // Find buyer by phone number
     const buyerSnap = await db.collection("users")
@@ -60,12 +69,38 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .get();
 
-    if (buyerSnap.empty)
-      return NextResponse.json({ error: "We couldn't find a Zola account with that phone number. Ask the buyer to create one first." }, { status: 404 });
+    let buyer: any = null;
+    // The buyer has no Zola account yet: they are invited to sign up, then pay
+    let invited = false;
+    const inviteEmail = cleanEmail(buyerEmail);
 
-    const buyer = buyerSnap.docs[0].data();
-    if (buyer.role !== "buyer")
-      return NextResponse.json({ error: "That number isn't registered to a buyer account" }, { status: 400 });
+    if (!buyerSnap.empty) {
+      buyer = buyerSnap.docs[0].data();
+      if (buyer.role !== "buyer")
+        return NextResponse.json({ error: "That number isn't registered to a buyer account" }, { status: 400 });
+    } else {
+      // Nobody on Zola has this number. Ask the seller for the buyer's email so we can invite them.
+      if (!inviteEmail)
+        return NextResponse.json({
+          error: "This buyer isn't on Zola yet. Enter their email and we'll invite them to sign up and pay.",
+          code: "buyer_not_found",
+        }, { status: 404 });
+      if (!isEmail(inviteEmail))
+        return NextResponse.json({ error: "Enter a valid email address for the buyer", code: "buyer_email_invalid" }, { status: 400 });
+      if (inviteEmail === cleanEmail(vendor.email))
+        return NextResponse.json({ error: "That's your own email. Enter the buyer's email.", code: "buyer_email_invalid" }, { status: 400 });
+
+      // The email may already belong to someone on Zola under a different number
+      const byEmail = await db.collection("users").where("email", "==", inviteEmail).limit(1).get();
+      if (!byEmail.empty) {
+        const found = byEmail.docs[0].data();
+        if (found.role !== "buyer")
+          return NextResponse.json({ error: "That email belongs to a seller account on Zola. Ask the buyer which email they'd like to use.", code: "buyer_email_invalid" }, { status: 400 });
+        buyer = found;
+      } else {
+        invited = true;
+      }
+    }
 
     // Fee added on top — buyer pays item price + fee, vendor receives full item price
     // Delivery is added unless the seller says there is nothing to deliver (a service, for example)
@@ -75,8 +110,25 @@ export async function POST(req: NextRequest) {
     const id  = randomUUID();
     const now = new Date().toISOString();
 
-    const vendorDoc = await db.collection("users").doc(session.id).get();
-    const vendor    = vendorDoc.data()!;
+    const buyerFields = invited
+      ? {
+          buyer_id:     invitedBuyerId(cleanPhone),   // placeholder until they sign up
+          buyer_name:   INVITED_BUYER_NAME,
+          buyer_email:  inviteEmail,
+          buyer_avatar: "",
+          buyer_phone:  cleanPhone,
+          buyer_pending:      true,
+          buyer_invite_email: inviteEmail,
+          buyer_invited_at:   now,
+        }
+      : {
+          buyer_id:     buyer.id,
+          buyer_name:   buyer.name,
+          buyer_email:  buyer.email,
+          buyer_avatar: buyer.avatar || "",
+          buyer_phone:  buyer.phone || cleanPhone,
+          buyer_pending: false,
+        };
 
     await db.collection("trades").doc(id).set({
       id, title, description,
@@ -90,11 +142,7 @@ export async function POST(req: NextRequest) {
       delivery_deadline: null,
       tracking_number:   null,
       monetbil_transaction_id: null,
-      buyer_id:     buyer.id,
-      buyer_name:   buyer.name,
-      buyer_email:  buyer.email,
-      buyer_avatar: buyer.avatar || "",
-      buyer_phone:  cleanPhone,
+      ...buyerFields,
       vendor_id:     session.id,
       vendor_name:   vendor.name,
       vendor_email:  vendor.email,
@@ -107,18 +155,45 @@ export async function POST(req: NextRequest) {
     await db.collection("trade_events").doc(eventId).set({
       id: eventId, trade_id: id,
       label:  "Transaction created",
-      detail: `${session.name} created this transaction for ${buyer.name}`,
+      detail: invited
+        ? `${session.name} created this transaction for a buyer who is not on Zola yet`
+        : `${session.name} created this transaction for ${buyer.name}`,
       type:   "info", created_at: now,
     });
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://safetrade-ruddy.vercel.app";
 
-    // In-app notifications for the buyer and the admin
-    await notifyTradeMove("created", {
-      id, title, amount: Number(amount), buyer_total: buyerTotal,
-      buyer_id: buyer.id, buyer_name: buyer.name,
+    const tradeForNotice = {
+      id, title, amount: Number(amount), fee, buyer_total: buyerTotal,
+      needs_delivery: withDelivery, delivery_fee: deliveryFee,
+      ...buyerFields,
       vendor_id: session.id, vendor_name: vendor.name,
-    });
+    };
+
+    // In-app notifications for the buyer and the admin
+    await notifyTradeMove("created", tradeForNotice);
+
+    // ── Buyer not on Zola yet: invite them by email and WhatsApp, then stop here ──
+    if (invited) {
+      notifyAdminTradeCreated({
+        vendorName: vendor.name, buyerName: `${INVITED_BUYER_NAME} +237${cleanPhone}`,
+        title, amount: buyerTotal, tradeId: id,
+      }).catch(console.error);
+
+      const result  = await sendBuyerInvite(tradeForNotice);
+      const summary = inviteSummary(tradeForNotice, result);
+      // Remember which messages actually went out, so the seller is told the truth
+      await db.collection("trades").doc(id).update({ buyer_invite_sent: { email: result.email, whatsapp: result.whatsapp } });
+      const inviteEventId = randomUUID();
+      await db.collection("trade_events").doc(inviteEventId).set({
+        id: inviteEventId, trade_id: id, ...summary, created_at: new Date().toISOString(),
+      });
+
+      return NextResponse.json({
+        success: true, tradeId: id, invited: true,
+        emailSent: result.email, whatsappSent: result.whatsapp,
+      });
+    }
 
     // WhatsApp notifications (fire and forget)
     if (buyer.phone) {
@@ -137,14 +212,14 @@ export async function POST(req: NextRequest) {
     const emailResult = await sendEmail({
       to: buyer.email,
       subject: `Zola: ${session.name} created a transaction for you`,
-      text: `Hi ${buyer.name},\n\n${session.name} created a transaction for you on Zola.\n\nItem: ${title}\nItem price: FCFA ${Number(amount).toLocaleString()}\nZola fee (${FEE_PERCENT_LABEL}): FCFA ${fee.toLocaleString()}${deliveryFee > 0 ? `\nDelivery: FCFA ${deliveryFee.toLocaleString()}` : ""}\nTotal to pay: FCFA ${buyerTotal.toLocaleString()}\n\nReview and pay securely: ${appUrl}/trade/${id}\n\nYou pay Zola, not the seller. We hold your payment until you confirm delivery.\n\nZola\nSecure transactions. Simple payments.`,
+      text: `Hi ${buyer.name},\n\n${session.name} created a transaction for you on Zola.\n\nItem: ${title}\nItem price: FCFA ${Number(amount).toLocaleString()}\nZola fee (${feePercentLabel(Number(amount))}): FCFA ${fee.toLocaleString()}${deliveryFee > 0 ? `\nDelivery: FCFA ${deliveryFee.toLocaleString()}` : ""}\nTotal to pay: FCFA ${buyerTotal.toLocaleString()}\n\nReview and pay securely: ${appUrl}/trade/${id}\n\nYou pay Zola, not the seller. We hold your payment until you confirm delivery.\n\nZola\nSecure transactions. Simple payments.`,
       html: emailLayout({
         heading: `${session.name} created a transaction for you`,
         intro: `Hi ${buyer.name}, review the details below and pay securely when you're ready.`,
         rows: [
           ["Item", title],
           ["Item price", `FCFA ${Number(amount).toLocaleString()}`],
-          [`Zola fee (${FEE_PERCENT_LABEL})`, `FCFA ${fee.toLocaleString()}`],
+          [`Zola fee (${feePercentLabel(Number(amount))})`, `FCFA ${fee.toLocaleString()}`],
           ...(deliveryFee > 0 ? [["Delivery", `FCFA ${deliveryFee.toLocaleString()}`] as [string, string]] : []),
         ],
         totalRow: ["Total to pay", `FCFA ${buyerTotal.toLocaleString()}`],

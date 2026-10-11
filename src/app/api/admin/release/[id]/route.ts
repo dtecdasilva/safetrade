@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { notifyVendorFundsReleased } from "@/lib/whatsapp";
 import { notifyTradeMove } from "@/lib/notifications";
+import { reviewState } from "@/lib/review";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -19,8 +20,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (trade.status !== "pending_release")
       return NextResponse.json({ error: "This transaction isn't ready for release yet" }, { status: 400 });
 
+    // The payment is only released once the 24-hour review allows it:
+    // buyer contacted, no open complaint, and the 24 hours are over.
+    const review = reviewState(trade as any);
+    if (!review.canRelease)
+      return NextResponse.json({ error: `This payment can't be released yet. ${review.blockers.join(" ")}`, blockers: review.blockers }, { status: 400 });
+
     await db.collection("trades").doc(params.id).update({
       status: "complete",
+      released_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
 

@@ -38,6 +38,16 @@ export async function POST(req: NextRequest) {
 
     if (status !== "SUCCESSFUL") {
       console.log("[fapshi-webhook] payment not successful, status was:", status);
+      // The attempt is over: let the seller edit the transaction again straight away
+      if (status === "FAILED" || status === "EXPIRED") {
+        try {
+          const ref = getDb().collection("trades").doc(tradeId);
+          const doc = await ref.get();
+          if (doc.exists && doc.data()!.status === "pending_payment") await ref.update({ payment_started_at: null });
+        } catch (e: any) {
+          console.error("[fapshi-webhook] could not clear payment attempt:", e.message);
+        }
+      }
       return NextResponse.json({ ok: true });
     }
 

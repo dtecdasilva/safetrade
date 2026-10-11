@@ -1,7 +1,7 @@
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN!;
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID!;
 const ADMIN_PHONE = process.env.WHATSAPP_ADMIN_PHONE || "237671543308";
-const API_URL = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
+const API_URL = process.env.WHATSAPP_API_URL || `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
 
 function fmt(phone: string): string {
   // Strip spaces, dashes, plus signs and ensure country code
@@ -30,6 +30,8 @@ async function send(to: string, template: string, components: any[] = []) {
           components: components.length > 0 ? components : undefined,
         },
       }),
+      // A slow WhatsApp API must never hold up the app
+      signal: AbortSignal.timeout(5000),
     });
 
     const data = await res.json();
@@ -68,6 +70,27 @@ export async function notifyBuyerTradeCreated(opts: {
     opts.title,
     `FCFA ${opts.amount.toLocaleString()}`,
     `${appUrl}/trade/${opts.tradeId}`,
+  ]));
+}
+
+// ── Invite a buyer who is not on Zola yet ────────────────────────────────────
+// Uses the "buyer_invite" template. Until that template is approved in Meta,
+// it falls back to the existing "trade_created" template, with the link
+// pointing at the signup page instead of the transaction.
+export async function notifyBuyerInvite(opts: {
+  buyerPhone: string;
+  vendorName: string;
+  title: string;
+  amount: number;
+  url: string;
+}) {
+  const amount = `FCFA ${opts.amount.toLocaleString()}`;
+  const first = await send(opts.buyerPhone, "buyer_invite", params([
+    opts.vendorName, opts.title, amount, opts.url,
+  ]));
+  if (first.success) return first;
+  return send(opts.buyerPhone, "trade_created", params([
+    "there", opts.vendorName, opts.title, amount, opts.url,
   ]));
 }
 
