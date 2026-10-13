@@ -1,4 +1,6 @@
+"use client";
 import React from "react";
+import { useT } from "@/components/I18n";
 import { MoneyRail } from "@/components/ui";
 import { MoneyAt } from "@/lib/zola";
 
@@ -35,17 +37,18 @@ const STEPS: { title: string; text: string; at: MoneyAt; note: string; held: boo
 
 /** The four-step explanation of how a Zola transaction works. */
 export default function HowItWorks() {
+  const { t } = useT();
   return (
     <ol className="how-grid">
       {STEPS.map((s, i) => (
         <li key={s.title} className="how-step">
           <div className="how-rail">
             <MoneyRail at={s.at} mini />
-            <p className={`how-rail-note${s.held ? " is-held" : ""}`}>{s.note}</p>
+            <p className={`how-rail-note${s.held ? " is-held" : ""}`}>{t(s.note)}</p>
           </div>
           <span className="how-num" aria-hidden="true">{i + 1}</span>
-          <h3 className="how-title">{s.title}</h3>
-          <p className="how-text">{s.text}</p>
+          <h3 className="how-title">{t(s.title)}</h3>
+          <p className="how-text">{t(s.text)}</p>
         </li>
       ))}
     </ol>

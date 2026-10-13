@@ -178,9 +178,32 @@
 .theme-text .when-dark { display: none; }
 :root[data-theme="dark"] .theme-text .when-dark { display: inline; }
 :root[data-theme="dark"] .theme-text .when-light { display: none; }
-.auth-theme { position: absolute; top: 20px; right: 20px; }
+.auth-theme { position: absolute; top: 20px; right: 20px; display: flex; align-items: center; gap: 6px; }
+
+/* Language switch */
+.lang-switch { gap: 6px; padding: 0 10px; color: var(--ink-2); }
+.lang-short { display: none; font-weight: 700; letter-spacing: 0.02em; }
+@media (max-width: 860px) { .nav-lang { display: none; } }
+/* In the signed-in bar there is little room: show EN / FR only */
+.nav-lang .lang-long { display: none; }
+.nav-lang .lang-short { display: inline; }
+@media (max-width: 1240px) { .nav-account-name { display: none; } }
+/* French labels are longer: give the bar a little more room */
+html[lang="fr"] .nav-account-name { display: none; }
+html[lang="fr"] .nav-inner { gap: 20px; }
+html[lang="fr"] .nav-links .nav-link { padding: 0 10px; }
+html[lang="fr"] .nav-right { gap: 8px; }
+.lang-row { background: none; border: none; cursor: pointer; width: 100%; text-align: left; font-family: inherit; }
+@media (max-width: 640px) {
+  .lang-switch .lang-long { display: none; }
+  .lang-switch .lang-short { display: inline; }
+  .lang-switch { padding: 0 8px; }
+}
 .auth-main { position: relative; }
-@media (max-width: 480px) { .site-theme { display: none; } }
+@media (max-width: 480px) {
+  /* Phones: logo, language and Sign in. Theme is in the footer; signing up is the big button on the page. */
+  .nav-right .site-theme, .nav-right .site-cta { display: none; }
+}
 
 html { -webkit-text-size-adjust: 100%; }
 
@@ -852,6 +875,21 @@ img, svg { max-width: 100%; }
   .contact-actions { width: 100%; }
   .contact-actions .btn { flex: 1; }
 }
+
+/* ── Terms and privacy ──────────────────────────────────────────────────── */
+
+.legal { max-width: 720px; }
+.legal-updated { font-size: 13.5px; color: var(--ink-3); margin-top: 6px; }
+.legal-toc { margin: 28px 0 8px; padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.legal-toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 28px; font-size: 14.5px; line-height: 1.9; }
+.legal-toc a { color: var(--ink-2); }
+.legal-section { scroll-margin-top: 80px; }
+.legal-section h2 { font-size: 19px; font-weight: 700; color: var(--navy); margin: 34px 0 10px; letter-spacing: -0.01em; }
+.legal-section p, .legal-section li { font-size: 15.5px; line-height: 1.7; color: var(--ink-2); }
+.legal-section p + p, .legal-section ul + p, .legal-section p + ul { margin-top: 10px; }
+.legal-section ul { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.legal-other { margin-top: 36px; font-weight: 600; }
+@media (max-width: 640px) { .legal-toc ol { columns: 1; } }
 
 /* ── Signup questions ───────────────────────────────────────────────────── */
 

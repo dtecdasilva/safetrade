@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { sendEmail, emailLayout } from "@/lib/mail";
-import { SUPPORT_LINE, prettyPhone, siteUrl } from "@/lib/support";
+import { supportLine, prettyPhone, siteUrl } from "@/lib/support";
 import { REVIEW_HOURS } from "@/lib/review";
 
 /**
@@ -32,6 +32,9 @@ export interface NotificationInput {
   userId: string;
   title: string;
   body: string;
+  /** The same message in French, for people who use Zola in French. */
+  title_fr?: string;
+  body_fr?: string;
   link?: string;
   tone?: NotificationTone;
   tradeId?: string;
@@ -83,6 +86,8 @@ async function saveInApp(items: NotificationInput[]): Promise<void> {
         user_id: n.userId,
         title: n.title,
         body: n.body,
+        title_fr: n.title_fr || "",
+        body_fr: n.body_fr || "",
         link: n.link || "",
         tone: n.tone || "info",
         trade_id: n.tradeId || "",
@@ -106,7 +111,7 @@ function looksLikeEmail(v: unknown): v is string {
 }
 
 /** Where admin notifications are emailed. */
-async function adminEmails(): Promise<string[]> {
+export async function adminEmails(): Promise<string[]> {
   const configured = (process.env.ADMIN_EMAIL || "")
     .split(/[\s,;]+/)
     .map((e) => e.trim())
@@ -119,18 +124,22 @@ async function adminEmails(): Promise<string[]> {
     .filter((e) => looksLikeEmail(e) && !PLACEHOLDER_EMAILS.has(e));
 }
 
-async function emailsFor(userId: string): Promise<string[]> {
-  if (userId === ADMIN_AUDIENCE) return adminEmails();
+interface Recipient { emails: string[]; lang: "en" | "fr" }
+
+async function recipientFor(userId: string): Promise<Recipient> {
+  if (userId === ADMIN_AUDIENCE) return { emails: await adminEmails(), lang: "en" };
   const doc = await getDb().collection("users").doc(userId).get();
-  const email = doc.exists ? String(doc.data()?.email || "").trim() : "";
-  return looksLikeEmail(email) ? [email] : [];
+  const data = doc.exists ? doc.data() : null;
+  const email = String(data?.email || "").trim();
+  return { emails: looksLikeEmail(email) ? [email] : [], lang: data?.lang === "fr" ? "fr" : "en" };
 }
 
-function buttonLabel(link: string): string {
-  if (link.startsWith("/trade/")) return "View transaction";
-  if (link.startsWith("/withdraw")) return "Open your wallet";
+function buttonLabel(link: string, lang: "en" | "fr"): string {
+  const fr = lang === "fr";
+  if (link.startsWith("/trade/")) return fr ? "Voir la transaction" : "View transaction";
+  if (link.startsWith("/withdraw")) return fr ? "Ouvrir votre portefeuille" : "Open your wallet";
   if (link.startsWith("/admin")) return "Open admin";
-  return "Open Zola";
+  return fr ? "Ouvrir Zola" : "Open Zola";
 }
 
 async function sendByEmail(items: NotificationInput[]): Promise<void> {
@@ -146,22 +155,28 @@ async function sendByEmail(items: NotificationInput[]): Promise<void> {
     const ids = Array.from(new Set(wanted.map((n) => n.userId)));
     const found = await Promise.all(
       ids.map(async (id) => {
-        try { return [id, await emailsFor(id)] as const; }
-        catch (e: any) { console.error("[notifications] email lookup failed:", e?.message); return [id, [] as string[]] as const; }
+        try { return [id, await recipientFor(id)] as const; }
+        catch (e: any) { console.error("[notifications] email lookup failed:", e?.message); return [id, { emails: [], lang: "en" } as Recipient] as const; }
       })
     );
-    const addresses = new Map<string, string[]>(found);
+    const recipients = new Map<string, Recipient>(found);
     const base = siteUrl();
 
     const jobs: Promise<unknown>[] = [];
     for (const n of wanted) {
+      const r = recipients.get(n.userId);
+      if (!r || !r.emails.length) continue;
+      const fr = r.lang === "fr" && !!n.title_fr;
+      const title = fr ? n.title_fr! : n.title;
+      const body  = fr ? n.body_fr || n.body : n.body;
+      const lang  = fr ? "fr" : "en";
       const link = n.link || "/dashboard";
       const url  = `${base}${link}`;
-      const label = buttonLabel(link);
-      const subject = `Zola: ${n.title}${n.subject ? ` · ${n.subject}` : ""}`;
-      const text = `${n.body}\n\n${label}: ${url}\n\n${SUPPORT_LINE}\n\nZola\nSecure transactions. Simple payments.`;
-      const html = emailLayout({ heading: n.title, intro: n.body, cta: { label, url } });
-      for (const to of addresses.get(n.userId) || []) {
+      const label = buttonLabel(link, lang);
+      const subject = `Zola: ${title}${n.subject ? ` · ${n.subject}` : ""}`;
+      const text = `${body}\n\n${label}: ${url}\n\n${supportLine(lang)}\n\nZola\n${lang === "fr" ? "Transactions sécurisées. Paiements simples." : "Secure transactions. Simple payments."}`;
+      const html = emailLayout({ heading: title, intro: body, cta: { label, url }, lang });
+      for (const to of r.emails) {
         jobs.push(
           sendEmail({ to, subject, text, html }).catch((e: any) =>
             console.error("[notifications] email failed:", e?.message)
@@ -213,12 +228,19 @@ export async function notifyTradeMove(
     const goods  = trade.needs_delivery !== undefined ? trade.needs_delivery !== false : Number(trade.delivery_fee) > 0;
     const out: NotificationInput[] = [];
 
+    // French values used inside the French sentences
+    const itemFr   = `« ${trade.title} »`;
+    const buyerFr  = trade.buyer_name  || "L'acheteur";
+    const sellerFr = trade.vendor_name || "Le vendeur";
+
     switch (move) {
       case "created":
         // The buyer already gets a fuller email (with the price breakdown) from the create step
         out.push({ ...base, userId: trade.buyer_id, tone: "info", email: false,
           title: `New transaction from ${seller}`,
-          body: `${item} is waiting for your payment. Pay ${total} to Zola and we hold it until your order arrives.` });
+          body: `${item} is waiting for your payment. Pay ${total} to Zola and we hold it until your order arrives.`,
+          title_fr: `Nouvelle transaction de ${sellerFr}`,
+          body_fr: `${itemFr} attend votre paiement. Payez ${total} à Zola : nous gardons l'argent jusqu'à l'arrivée de votre commande.` });
         out.push({ ...base, userId: ADMIN_AUDIENCE, tone: "info",
           title: "New transaction created",
           body: trade.buyer_pending
@@ -229,23 +251,31 @@ export async function notifyTradeMove(
       case "buyer_joined":
         out.push({ ...base, userId: trade.vendor_id, tone: "success",
           title: "Your buyer has joined Zola",
-          body: `${buyer} created an account and can now pay ${total} for ${item}. We'll tell you as soon as the payment is held.` });
+          body: `${buyer} created an account and can now pay ${total} for ${item}. We'll tell you as soon as the payment is held.`,
+          title_fr: "Votre acheteur a rejoint Zola",
+          body_fr: `${buyerFr} a créé un compte et peut maintenant payer ${total} pour ${itemFr}. Nous vous préviendrons dès que le paiement sera sécurisé.` });
         // They are looking at the transaction right after signing up, so no email
         out.push({ ...base, userId: trade.buyer_id, tone: "info", email: false,
           title: `A transaction from ${seller} is waiting`,
-          body: `${item} is waiting for your payment. Pay ${total} to Zola and we hold it until your order arrives.` });
+          body: `${item} is waiting for your payment. Pay ${total} to Zola and we hold it until your order arrives.`,
+          title_fr: `Une transaction de ${sellerFr} vous attend`,
+          body_fr: `${itemFr} attend votre paiement. Payez ${total} à Zola : nous gardons l'argent jusqu'à l'arrivée de votre commande.` });
         break;
 
       case "edited":
         out.push({ ...base, userId: trade.buyer_id, tone: "info",
           title: "Transaction details changed",
-          body: `${seller} updated ${item}. The total to pay is now ${total}. Review the details before paying.` });
+          body: `${seller} updated ${item}. The total to pay is now ${total}. Review the details before paying.`,
+          title_fr: "Détails de la transaction modifiés",
+          body_fr: `${sellerFr} a modifié ${itemFr}. Le total à payer est maintenant de ${total}. Vérifiez les détails avant de payer.` });
         break;
 
       case "deleted":
         out.push({ userId: trade.buyer_id, tone: "warn", link: "/dashboard",
           title: "Transaction removed by the seller",
-          body: `${seller} deleted ${item} before payment. Nothing was charged.` });
+          body: `${seller} deleted ${item} before payment. Nothing was charged.`,
+          title_fr: "Transaction supprimée par le vendeur",
+          body_fr: `${sellerFr} a supprimé ${itemFr} avant le paiement. Rien n'a été prélevé.` });
         break;
 
       case "paid":
@@ -253,12 +283,20 @@ export async function notifyTradeMove(
           title: "Payment secured",
           body: goods
             ? `${buyer} paid for ${item}. Zola is holding ${price} for you. Now send the item to Zola: we deliver it to the buyer, and the buyer has already paid for delivery.`
-            : `${buyer} paid for ${item}. Zola is holding ${price} for you. Complete the work to receive it.` });
+            : `${buyer} paid for ${item}. Zola is holding ${price} for you. Complete the work to receive it.`,
+          title_fr: "Paiement sécurisé",
+          body_fr: goods
+            ? `${buyerFr} a payé ${itemFr}. Zola garde ${price} pour vous. Remettez maintenant l'article à Zola : nous le livrons à l'acheteur, qui a déjà payé la livraison.`
+            : `${buyerFr} a payé ${itemFr}. Zola garde ${price} pour vous. Réalisez le travail pour le recevoir.` });
         out.push({ ...base, userId: trade.buyer_id, tone: "success",
           title: "Payment received",
           body: goods
             ? `Zola is holding your payment for ${item}. The seller now sends it to Zola, and Zola delivers it to you.`
-            : `Zola is holding your payment for ${item} until you confirm it has been delivered.` });
+            : `Zola is holding your payment for ${item} until you confirm it has been delivered.`,
+          title_fr: "Paiement reçu",
+          body_fr: goods
+            ? `Zola garde votre paiement pour ${itemFr}. Le vendeur remet maintenant l'article à Zola, qui vous le livre.`
+            : `Zola garde votre paiement pour ${itemFr} jusqu'à votre confirmation de livraison.` });
         out.push({ ...base, userId: ADMIN_AUDIENCE, tone: "info",
           title: "Payment received",
           body: `${buyer} paid ${total} for ${item}. Zola is holding ${price} for ${seller}.` });
@@ -267,7 +305,9 @@ export async function notifyTradeMove(
       case "payment_failed":
         out.push({ ...base, userId: trade.buyer_id, tone: "warn",
           title: "Payment not completed",
-          body: `Your payment for ${item} was cancelled or timed out. No money was taken. You can try again.` });
+          body: `Your payment for ${item} was cancelled or timed out. No money was taken. You can try again.`,
+          title_fr: "Paiement non abouti",
+          body_fr: `Votre paiement pour ${itemFr} a été annulé ou a expiré. Aucun argent n'a été prélevé. Vous pouvez réessayer.` });
         break;
 
       case "shipped":
@@ -275,7 +315,11 @@ export async function notifyTradeMove(
           title: "Your order is on its way",
           body: goods
             ? `${seller} has handed ${item} to Zola for delivery. Confirm delivery once it arrives so the seller can be paid.`
-            : `${seller} marked ${item} as delivered. Confirm delivery once you have it so the seller can be paid.` });
+            : `${seller} marked ${item} as delivered. Confirm delivery once you have it so the seller can be paid.`,
+          title_fr: "Votre commande est en route",
+          body_fr: goods
+            ? `${sellerFr} a remis ${itemFr} à Zola pour la livraison. Confirmez la livraison dès réception pour que le vendeur soit payé.`
+            : `${sellerFr} a indiqué ${itemFr} comme livré. Confirmez la livraison une fois reçu pour que le vendeur soit payé.` });
         out.push({ ...base, userId: ADMIN_AUDIENCE, tone: goods ? "warn" : "info",
           title: goods ? "Item handed over for delivery" : "Order marked as delivered",
           body: goods
@@ -286,10 +330,14 @@ export async function notifyTradeMove(
       case "delivered":
         out.push({ ...base, userId: trade.vendor_id, tone: "success",
           title: "Delivery confirmed, now under review",
-          body: `${buyer} confirmed delivery of ${item}. Zola reviews every delivery for ${REVIEW_HOURS} hours, then releases ${price} to you.` });
+          body: `${buyer} confirmed delivery of ${item}. Zola reviews every delivery for ${REVIEW_HOURS} hours, then releases ${price} to you.`,
+          title_fr: "Livraison confirmée, en vérification",
+          body_fr: `${buyerFr} a confirmé la livraison de ${itemFr}. Zola vérifie chaque livraison pendant ${REVIEW_HOURS} heures, puis vous verse ${price}.` });
         out.push({ ...base, userId: trade.buyer_id, tone: "info",
           title: "Thanks for confirming delivery",
-          body: `${item} is now under review for ${REVIEW_HOURS} hours. If anything is wrong with your order, make a complaint from the transaction page before the review ends. Zola may call or text you to check. After that, the seller is paid.` });
+          body: `${item} is now under review for ${REVIEW_HOURS} hours. If anything is wrong with your order, make a complaint from the transaction page before the review ends. Zola may call or text you to check. After that, the seller is paid.`,
+          title_fr: "Merci d'avoir confirmé la livraison",
+          body_fr: `${itemFr} est maintenant en vérification pendant ${REVIEW_HOURS} heures. En cas de problème avec votre commande, faites une réclamation depuis la page de la transaction avant la fin de la vérification. Zola peut vous appeler ou vous écrire pour vérifier. Ensuite, le vendeur est payé.` });
         out.push({ ...base, userId: ADMIN_AUDIENCE, tone: "warn",
           title: "Review started: call or text the buyer",
           body: `${buyer} confirmed delivery of ${item}. Call or text them${phone ? ` on ${phone}` : ""} to check, then release ${price} to ${seller} once the ${REVIEW_HOURS}-hour review is over.` });
@@ -302,40 +350,54 @@ export async function notifyTradeMove(
           body: `${buyer} made a complaint about ${item}.${said} Call or text them${phone ? ` on ${phone}` : ""}. ${price} stays on hold for ${seller} until you mark it as resolved.` });
         out.push({ ...base, userId: trade.vendor_id, tone: "warn",
           title: "The buyer reported a problem",
-          body: `${buyer} made a complaint about ${item}. Your payment of ${price} stays held by Zola while we look into it. We may call or text you.` });
+          body: `${buyer} made a complaint about ${item}. Your payment of ${price} stays held by Zola while we look into it. We may call or text you.`,
+          title_fr: "L'acheteur a signalé un problème",
+          body_fr: `${buyerFr} a fait une réclamation sur ${itemFr}. Votre paiement de ${price} reste bloqué chez Zola pendant que nous examinons la situation. Nous pourrions vous appeler ou vous écrire.` });
         out.push({ ...base, userId: trade.buyer_id, tone: "info",
           title: "We've received your complaint",
-          body: `Zola is looking into your complaint about ${item} and will call or text you. The seller is not paid until it is settled.` });
+          body: `Zola is looking into your complaint about ${item} and will call or text you. The seller is not paid until it is settled.`,
+          title_fr: "Nous avons reçu votre réclamation",
+          body_fr: `Zola examine votre réclamation sur ${itemFr} et vous appellera ou vous écrira. Le vendeur n'est pas payé tant que ce n'est pas réglé.` });
         break;
       }
 
       case "complaint_resolved": {
         const note = opts.note ? ` Note from Zola: “${opts.note}”` : "";
+        const noteFr = opts.note ? ` Note de Zola : « ${opts.note} »` : "";
         out.push({ ...base, userId: trade.buyer_id, tone: "info",
           title: "Your complaint has been resolved",
-          body: `Zola has closed your complaint about ${item}.${note}` });
+          body: `Zola has closed your complaint about ${item}.${note}`,
+          title_fr: "Votre réclamation a été résolue",
+          body_fr: `Zola a clôturé votre réclamation sur ${itemFr}.${noteFr}` });
         out.push({ ...base, userId: trade.vendor_id, tone: "info",
           title: "Complaint resolved",
-          body: `The buyer's complaint about ${item} has been closed.${note}` });
+          body: `The buyer's complaint about ${item} has been closed.${note}`,
+          title_fr: "Réclamation résolue",
+          body_fr: `La réclamation de l'acheteur sur ${itemFr} a été clôturée.${noteFr}` });
         break;
       }
 
       case "released":
         out.push({ ...base, userId: trade.vendor_id, tone: "success", link: "/withdraw",
           title: "You've been paid",
-          body: `${price} for ${item} is now in your Zola wallet, ready to withdraw.` });
+          body: `${price} for ${item} is now in your Zola wallet, ready to withdraw.`,
+          title_fr: "Vous avez été payé",
+          body_fr: `${price} pour ${itemFr} sont maintenant dans votre portefeuille Zola, prêts à être retirés.` });
         out.push({ ...base, userId: trade.buyer_id, tone: "success",
           title: "Transaction completed",
-          body: `Zola released your payment for ${item} to ${seller}.` });
+          body: `Zola released your payment for ${item} to ${seller}.`,
+          title_fr: "Transaction terminée",
+          body_fr: `Zola a versé votre paiement pour ${itemFr} à ${sellerFr}.` });
         break;
 
       case "disputed": {
         const who = opts.actorName || "Someone";
         const text = `${who} opened a dispute on ${item}. The payment stays held by Zola while it is reviewed.`;
+        const textFr = `${opts.actorName || "Quelqu'un"} a ouvert un litige sur ${itemFr}. Le paiement reste bloqué chez Zola pendant l'examen.`;
         if (opts.actorId !== trade.vendor_id)
-          out.push({ ...base, userId: trade.vendor_id, tone: "danger", title: "Dispute opened", body: text });
+          out.push({ ...base, userId: trade.vendor_id, tone: "danger", title: "Dispute opened", body: text, title_fr: "Litige ouvert", body_fr: textFr });
         if (opts.actorId !== trade.buyer_id)
-          out.push({ ...base, userId: trade.buyer_id, tone: "danger", title: "Dispute opened", body: text });
+          out.push({ ...base, userId: trade.buyer_id, tone: "danger", title: "Dispute opened", body: text, title_fr: "Litige ouvert", body_fr: textFr });
         out.push({ ...base, userId: ADMIN_AUDIENCE, tone: "danger",
           title: "Dispute to review",
           body: `${who} opened a dispute on ${item} (${buyer} and ${seller}). ${price} is on hold.` });
@@ -368,5 +430,7 @@ export async function notifyWithdrawalSent(w: {
     userId: w.vendor_id, tone: "success", link: "/withdraw",
     title: "Withdrawal sent",
     body: `${fcfa(w.amount)} was sent to your ${w.network} number, +237${w.phone}.`,
+    title_fr: "Retrait envoyé",
+    body_fr: `${fcfa(w.amount)} ont été envoyés à votre numéro ${w.network}, +237${w.phone}.`,
   }]);
 }

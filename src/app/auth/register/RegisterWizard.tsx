@@ -7,6 +7,8 @@ import GoogleButton from "@/components/GoogleButton";
 import { PhoneField } from "@/components/ui";
 import { money } from "@/lib/zola";
 import { DELIVERY_FEE, FEE_LARGE_LABEL, FEE_STANDARD_LABEL, FEE_THRESHOLD_LABEL } from "@/lib/fees";
+import { useT, rich } from "@/components/I18n";
+import { T } from "@/lib/i18n/core";
 
 /**
  * Creating an account, one question at a time.
@@ -28,40 +30,41 @@ interface Invite {
   phone: string; email: string;
 }
 
-const FEE_LINE = `the Zola fee (${FEE_STANDARD_LABEL}, or ${FEE_LARGE_LABEL} above ${FEE_THRESHOLD_LABEL})`;
-
-function pointsFor(role: Role, sells: Sells | ""): { title: string; text: string }[] {
+function pointsFor(role: Role, sells: Sells | "", t: T): { title: string; text: string }[] {
+  const fee = t("the Zola fee ({standard}, or {large} above {threshold})", { standard: FEE_STANDARD_LABEL, large: FEE_LARGE_LABEL, threshold: FEE_THRESHOLD_LABEL });
+  const delivery = money(DELIVERY_FEE);
   if (role === "buyer") {
     return [
-      { title: "A seller creates a transaction for you",
-        text: "They use your phone number, so sign up with the number you gave them." },
-      { title: "You pay Zola, not the seller",
-        text: `You pay the item price, ${FEE_LINE} and ${money(DELIVERY_FEE)} delivery. You see the full total before you pay.` },
-      { title: "Zola delivers your order",
-        text: "The seller sends it to Zola and Zola brings it to you. Your money stays with Zola the whole time." },
-      { title: "Confirm when it arrives",
-        text: "You then have 24 hours to tell us if anything is wrong. After that, the seller is paid." },
+      { title: t("A seller creates a transaction for you"),
+        text: t("They use your phone number, so sign up with the number you gave them.") },
+      { title: t("You pay Zola, not the seller"),
+        text: t("You pay the item price, {fee} and {delivery} delivery. You see the full total before you pay.", { fee, delivery }) },
+      { title: t("Zola delivers your order"),
+        text: t("The seller sends it to Zola and Zola brings it to you. Your money stays with Zola the whole time.") },
+      { title: t("Confirm when it arrives"),
+        text: t("You then have 24 hours to tell us if anything is wrong. After that, the seller is paid.") },
     ];
   }
   const third =
     sells === "services"
-      ? { title: "You do the work",
-          text: "There is nothing to deliver, so switch delivery off and no delivery fee is added. Mark it as delivered when you're done." }
-      : { title: "You send the item to Zola",
-          text: `Not straight to the buyer. Zola delivers it, and the buyer pays the ${money(DELIVERY_FEE)} delivery, not you.` +
-                (sells === "both" ? " For a service there is nothing to send: you just mark the work as delivered." : "") };
+      ? { title: t("You do the work"),
+          text: t("There is nothing to deliver, so switch delivery off and no delivery fee is added. Mark it as delivered when you're done.") }
+      : { title: t("You send the item to Zola"),
+          text: t("Not straight to the buyer. Zola delivers it, and the buyer pays the {delivery} delivery, not you.", { delivery }) +
+                (sells === "both" ? " " + t("For a service there is nothing to send: you just mark the work as delivered.") : "") };
   return [
-    { title: "You create a transaction",
-      text: "Enter the item, your price and the buyer's phone number. If they aren't on Zola yet, we invite them for you." },
-    { title: "The buyer pays Zola",
-      text: `We tell you the moment the money is held. The buyer pays ${FEE_LINE} on top, so you receive your full price.` },
+    { title: t("You create a transaction"),
+      text: t("Enter the item, your price and the buyer's phone number. If they aren't on Zola yet, we invite them for you.") },
+    { title: t("The buyer pays Zola"),
+      text: t("We tell you the moment the money is held. The buyer pays {fee} on top, so you receive your full price.", { fee }) },
     third,
-    { title: "You get paid",
-      text: "The buyer confirms delivery. After a 24-hour review, the money is in your Zola wallet, ready to withdraw to mobile money." },
+    { title: t("You get paid"),
+      text: t("The buyer confirms delivery. After a 24-hour review, the money is in your Zola wallet, ready to withdraw to mobile money.") },
   ];
 }
 
 export default function RegisterWizard({ inviteId = "" }: { inviteId?: string }) {
+  const { t, lang } = useT();
   const [step, setStep]   = useState<Step>("role");
   const [role, setRole]   = useState<Role | "">("");
   const [sells, setSells] = useState<Sells | "">("");
@@ -117,7 +120,7 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, name: form.name.trim(), role, sells, invite: inviteId }),
+        body: JSON.stringify({ ...form, name: form.name.trim(), role, sells, invite: inviteId, lang }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -164,44 +167,44 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
     return (
       <AuthShell>
         <span className="auth-badge"><CheckCircle size={24} /></span>
-        <h1 className="auth-title">You&apos;re in{firstName ? `, ${firstName}` : ""}.</h1>
+        <h1 className="auth-title">{firstName ? t("You're in, {name}.", { name: firstName }) : t("You're in.")}</h1>
         {tradeId ? (
           <>
             <p className="auth-sub">
-              {invite ? `${invite.sellerName}'s transaction is waiting for you.` : "A seller already created a transaction for you."}{" "}
-              Review it, then pay Zola when you&apos;re ready.
+              {invite ? t("{seller}'s transaction is waiting for you.", { seller: invite.sellerName }) : t("A seller already created a transaction for you.")}{" "}
+              {t("Review it, then pay Zola when you're ready.")}
             </p>
-            <a href={`/trade/${tradeId}`} className="btn btn-primary btn-lg btn-block">Review and pay <ArrowRight size={17} /></a>
+            <a href={`/trade/${tradeId}`} className="btn btn-primary btn-lg btn-block">{t("Review and pay")} <ArrowRight size={17} /></a>
           </>
         ) : role === "vendor" ? (
           <>
-            <p className="auth-sub">Your seller account is ready. Create your first transaction and Zola will notify the buyer.</p>
-            <a href="/trade/new" className="btn btn-primary btn-lg btn-block">Create my first transaction <ArrowRight size={17} /></a>
-            <a href="/dashboard" className="btn btn-secondary btn-block" style={{ marginTop: 10 }}>Go to my dashboard</a>
+            <p className="auth-sub">{t("Your seller account is ready. Create your first transaction and Zola will notify the buyer.")}</p>
+            <a href="/trade/new" className="btn btn-primary btn-lg btn-block">{t("Create my first transaction")} <ArrowRight size={17} /></a>
+            <a href="/dashboard" className="btn btn-secondary btn-block" style={{ marginTop: 10 }}>{t("Go to my dashboard")}</a>
           </>
         ) : (
           <>
             <p className="auth-sub">
-              Your buyer account is ready. Give your seller this number and ask them to create the transaction on Zola:{" "}
+              {t("Your buyer account is ready. Give your seller this number and ask them to create the transaction on Zola:")}{" "}
               <strong className="num" style={{ color: "var(--navy)", whiteSpace: "nowrap" }}>+237 {form.phone}</strong>
             </p>
-            <a href="/dashboard" className="btn btn-primary btn-lg btn-block">Go to my dashboard <ArrowRight size={17} /></a>
+            <a href="/dashboard" className="btn btn-primary btn-lg btn-block">{t("Go to my dashboard")} <ArrowRight size={17} /></a>
           </>
         )}
       </AuthShell>
     );
   }
 
-  const points = role ? pointsFor(role, sells) : [];
+  const points = role ? pointsFor(role, sells, t) : [];
 
   return (
     <AuthShell>
       {/* Where you are */}
       <div className="wiz-top">
         {index > 0
-          ? <button type="button" className="wiz-back" onClick={back}><ArrowLeft size={15} /> Back</button>
+          ? <button type="button" className="wiz-back" onClick={back}><ArrowLeft size={15} /> {t("Back")}</button>
           : <span />}
-        <span className="wiz-count">Step {index + 1} of {steps.length}</span>
+        <span className="wiz-count">{t("Step {n} of {total}", { n: index + 1, total: steps.length })}</span>
       </div>
       <div className="wiz-bar" aria-hidden="true">
         {steps.map((s, i) => <span key={s} className={i <= index ? "is-done" : ""} />)}
@@ -209,7 +212,7 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
 
       {inviteNote && step === "role" && (
         <div className="notice notice-info" style={{ marginBottom: 18 }}>
-          <span>{inviteNote} <Link href="/auth/login">Sign in</Link></span>
+          <span>{t(inviteNote)} <Link href="/auth/login">{t("Sign in")}</Link></span>
         </div>
       )}
 
@@ -218,44 +221,44 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
         {/* ── Invitation ── */}
         {step === "invite" && invite && (
           <>
-            <h1 className="auth-title">{invite.sellerName} wants you to pay safely with Zola</h1>
+            <h1 className="auth-title">{t("{seller} wants you to pay safely with Zola", { seller: invite.sellerName })}</h1>
             <p className="auth-sub">
-              With Zola you pay us, not the seller. We hold your money until your order arrives.
+              {t("With Zola you pay us, not the seller. We hold your money until your order arrives.")}
             </p>
             <div className="wiz-summary">
               <p className="wiz-summary-title">{invite.title}</p>
-              <div className="kv"><span>Item price</span><span>{money(invite.amount)}</span></div>
-              <div className="kv"><span>Zola fee</span><span>{money(invite.fee)}</span></div>
-              {invite.deliveryFee > 0 && <div className="kv"><span>Delivery</span><span>{money(invite.deliveryFee)}</span></div>}
-              <div className="kv kv-total"><span>Total to pay</span><span>{money(invite.total)}</span></div>
+              <div className="kv"><span>{t("Item price")}</span><span>{money(invite.amount)}</span></div>
+              <div className="kv"><span>{t("Zola fee")}</span><span>{money(invite.fee)}</span></div>
+              {invite.deliveryFee > 0 && <div className="kv"><span>{t("Delivery")}</span><span>{money(invite.deliveryFee)}</span></div>}
+              <div className="kv kv-total"><span>{t("Total to pay")}</span><span>{money(invite.total)}</span></div>
             </div>
             <p className="hint" style={{ margin: "14px 2px 20px", fontSize: 14 }}>
-              Create your account first. It takes about a minute, and this transaction will be waiting for you at the end.
+              {t("Create your account first. It takes about a minute, and this transaction will be waiting for you at the end.")}
             </p>
-            <button type="submit" className="btn btn-primary btn-lg btn-block">Create my account <ArrowRight size={17} /></button>
+            <button type="submit" className="btn btn-primary btn-lg btn-block">{t("Create my account")} <ArrowRight size={17} /></button>
           </>
         )}
 
         {/* ── Buying or selling ── */}
         {step === "role" && (
           <>
-            <h1 className="auth-title">What brings you to Zola?</h1>
-            <p className="auth-sub">Zola holds the payment in the middle, so neither side has to trust a stranger.</p>
+            <h1 className="auth-title">{t("What brings you to Zola?")}</h1>
+            <p className="auth-sub">{t("Zola holds the payment in the middle, so neither side has to trust a stranger.")}</p>
             <div className="wiz-choices">
               <button type="button" className="wiz-choice" aria-pressed={role === "buyer"}
                 onClick={() => { setRole("buyer"); setSells(""); go("how"); }}>
                 <span className="wiz-choice-icon"><ShoppingBag size={18} /></span>
                 <span>
-                  <span className="wiz-choice-title">I&apos;m buying</span>
-                  <span className="wiz-choice-text">Pay Zola, not the seller. Your money is held until your order arrives.</span>
+                  <span className="wiz-choice-title">{t("I'm buying")}</span>
+                  <span className="wiz-choice-text">{t("Pay Zola, not the seller. Your money is held until your order arrives.")}</span>
                 </span>
               </button>
               <button type="button" className="wiz-choice" aria-pressed={role === "vendor"}
                 onClick={() => { setRole("vendor"); go("sells"); }}>
                 <span className="wiz-choice-icon"><Store size={18} /></span>
                 <span>
-                  <span className="wiz-choice-title">I&apos;m selling</span>
-                  <span className="wiz-choice-text">Know the buyer has paid before you send anything.</span>
+                  <span className="wiz-choice-title">{t("I'm selling")}</span>
+                  <span className="wiz-choice-text">{t("Know the buyer has paid before you send anything.")}</span>
                 </span>
               </button>
             </div>
@@ -265,8 +268,8 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
         {/* ── What a seller sells ── */}
         {step === "sells" && (
           <>
-            <h1 className="auth-title">What do you sell?</h1>
-            <p className="auth-sub">This decides how delivery works for you. You can still choose for each transaction.</p>
+            <h1 className="auth-title">{t("What do you sell?")}</h1>
+            <p className="auth-sub">{t("This decides how delivery works for you. You can still choose for each transaction.")}</p>
             <div className="wiz-choices">
               {([
                 { val: "goods",    icon: <Package size={18} />, title: "Products",  text: "Phones, clothes, food: anything that has to be delivered." },
@@ -277,8 +280,8 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
                   onClick={() => { setSells(c.val); go("how"); }}>
                   <span className="wiz-choice-icon">{c.icon}</span>
                   <span>
-                    <span className="wiz-choice-title">{c.title}</span>
-                    <span className="wiz-choice-text">{c.text}</span>
+                    <span className="wiz-choice-title">{t(c.title)}</span>
+                    <span className="wiz-choice-text">{t(c.text)}</span>
                   </span>
                 </button>
               ))}
@@ -289,8 +292,8 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
         {/* ── How Zola works for this person ── */}
         {step === "how" && (
           <>
-            <h1 className="auth-title">{role === "vendor" ? "How selling on Zola works" : "How buying on Zola works"}</h1>
-            <p className="auth-sub">Four steps. Take a moment to read them before you continue.</p>
+            <h1 className="auth-title">{role === "vendor" ? t("How selling on Zola works") : t("How buying on Zola works")}</h1>
+            <p className="auth-sub">{t("Four steps. Take a moment to read them before you continue.")}</p>
             <ol className="wiz-points">
               {points.map((p, i) => (
                 <li key={p.title}>
@@ -302,83 +305,89 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
                 </li>
               ))}
             </ol>
-            <button type="submit" className="btn btn-primary btn-lg btn-block" style={{ marginTop: 24 }}>Got it, continue <ArrowRight size={17} /></button>
+            <button type="submit" className="btn btn-primary btn-lg btn-block" style={{ marginTop: 24 }}>{t("Got it, continue")} <ArrowRight size={17} /></button>
           </>
         )}
 
         {/* ── Name ── */}
         {step === "name" && (
           <>
-            <h1 className="auth-title">What&apos;s your name?</h1>
+            <h1 className="auth-title">{t("What's your name?")}</h1>
             <p className="auth-sub">
-              {role === "vendor" ? "Buyers see this on every transaction you create." : "Sellers see this when they create a transaction for you."}
+              {role === "vendor" ? t("Buyers see this on every transaction you create.") : t("Sellers see this when they create a transaction for you.")}
             </p>
-            {error && <div className="notice notice-danger" role="alert" style={{ marginBottom: 14 }}>{error}</div>}
+            {error && <div className="notice notice-danger" role="alert" style={{ marginBottom: 14 }}>{t(error)}</div>}
             <div className="field" style={{ marginBottom: 18 }}>
-              <label className="label" htmlFor="name">Full name</label>
-              <input id="name" ref={firstField} className="input" type="text" placeholder="Your full name" autoComplete="name"
+              <label className="label" htmlFor="name">{t("Full name")}</label>
+              <input id="name" ref={firstField} className="input" type="text" placeholder={t("Your full name")} autoComplete="name"
                 value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
             </div>
-            <button type="submit" className="btn btn-primary btn-lg btn-block">Continue <ArrowRight size={17} /></button>
+            <button type="submit" className="btn btn-primary btn-lg btn-block">{t("Continue")} <ArrowRight size={17} /></button>
           </>
         )}
 
         {/* ── Phone ── */}
         {step === "phone" && (
           <>
-            <h1 className="auth-title">What&apos;s your WhatsApp number?</h1>
+            <h1 className="auth-title">{t("What's your WhatsApp number?")}</h1>
             <p className="auth-sub">
               {invite
-                ? `This is the number ${invite.sellerName} used. Keep it and your transaction will be waiting for you.`
+                ? t("This is the number {seller} used. Keep it and your transaction will be waiting for you.", { seller: invite.sellerName })
                 : role === "vendor"
-                  ? "We send your payment updates here. Each number can have one Zola account."
-                  : "Sellers find you on Zola by this number, and we send your updates here. Each number can have one account."}
+                  ? t("We send your payment updates here. Each number can have one Zola account.")
+                  : t("Sellers find you on Zola by this number, and we send your updates here. Each number can have one account.")}
             </p>
-            {error && <div className="notice notice-danger" role="alert" style={{ marginBottom: 14 }}>{error}</div>}
+            {error && <div className="notice notice-danger" role="alert" style={{ marginBottom: 14 }}>{t(error)}</div>}
             <div className="field" style={{ marginBottom: 18 }}>
-              <label className="label" htmlFor="phone">WhatsApp number</label>
+              <label className="label" htmlFor="phone">{t("WhatsApp number")}</label>
               <PhoneField id="phone" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
             </div>
-            <button type="submit" className="btn btn-primary btn-lg btn-block">Continue <ArrowRight size={17} /></button>
+            <button type="submit" className="btn btn-primary btn-lg btn-block">{t("Continue")} <ArrowRight size={17} /></button>
           </>
         )}
 
         {/* ── Email and password ── */}
         {step === "account" && (
           <>
-            <h1 className="auth-title">Last step: how will you sign in?</h1>
-            <p className="auth-sub">We also email you every time one of your transactions moves.</p>
-            {error && <div className="notice notice-danger" role="alert" style={{ marginBottom: 14 }}>{error}</div>}
+            <h1 className="auth-title">{t("Last step: how will you sign in?")}</h1>
+            <p className="auth-sub">{t("We also email you every time one of your transactions moves.")}</p>
+            {error && <div className="notice notice-danger" role="alert" style={{ marginBottom: 14 }}>{t(error)}</div>}
             <div className="auth-form">
               <div className="field">
-                <label className="label" htmlFor="email">Email</label>
-                <input id="email" ref={firstField} className="input" type="email" placeholder="you@example.com" autoComplete="email"
+                <label className="label" htmlFor="email">{t("Email")}</label>
+                <input id="email" ref={firstField} className="input" type="email" placeholder={t("you@example.com")} autoComplete="email"
                   value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
               </div>
               <div className="field">
-                <label className="label" htmlFor="password">Password</label>
+                <label className="label" htmlFor="password">{t("Password")}</label>
                 <div className="input-wrap">
                   <input id="password" className="input" type={showPw ? "text" : "password"}
-                    placeholder="At least 8 characters" autoComplete="new-password"
+                    placeholder={t("At least 8 characters")} autoComplete="new-password"
                     value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} />
                   <button type="button" className="input-affix" onClick={() => setShowPw(s => !s)}
-                    aria-label={showPw ? "Hide password" : "Show password"}>
+                    aria-label={showPw ? t("Hide password") : t("Show password")}>
                     {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
                 </div>
               </div>
               <button type="submit" disabled={loading} className="btn btn-primary btn-lg btn-block" style={{ marginTop: 4 }}>
-                {loading ? "Creating your account..." : `Create my ${role === "vendor" ? "seller" : "buyer"} account`}
+                {loading ? t("Creating your account...") : role === "vendor" ? t("Create my seller account") : t("Create my buyer account")}
               </button>
             </div>
-            <div className="or-rule">or</div>
+            <div className="or-rule">{t("or")}</div>
             <GoogleButton role={role || "buyer"} label="Sign up with Google instead" />
+            <p className="hint" style={{ marginTop: 16, textAlign: "center" }}>
+              {rich(t("By creating an account, you agree to Zola's <terms>Terms of use</terms> and <privacy>Privacy policy</privacy>."), {
+                terms: (c) => <Link href="/terms" target="_blank">{c}</Link>,
+                privacy: (c) => <Link href="/privacy" target="_blank">{c}</Link>,
+              })}
+            </p>
           </>
         )}
       </form>
 
       <p className="auth-foot">
-        Already have an account? <Link href="/auth/login">Sign in</Link>
+        {t("Already have an account?")} <Link href="/auth/login">{t("Sign in")}</Link>
       </p>
     </AuthShell>
   );

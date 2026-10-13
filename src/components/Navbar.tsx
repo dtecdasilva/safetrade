@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "@/components/NotificationBell";
+import LangSwitch from "@/components/LangSwitch";
+import { useT } from "@/components/I18n";
 import { brandText, initials as toInitials, roleLabel } from "@/lib/zola";
 
 interface NavbarProps {
@@ -13,6 +15,7 @@ interface NavbarProps {
 }
 
 export default function Navbar({ user }: NavbarProps) {
+  const { t } = useT();
   const path   = usePathname();
   const router = useRouter();
   const [open, setOpen]         = useState(false);
@@ -48,15 +51,15 @@ export default function Navbar({ user }: NavbarProps) {
 
   const navLinks = isAdmin
     ? [
-        { href: "/admin", label: "Admin", icon: <LayoutDashboard size={17} /> },
-        { href: "/help",  label: "Help",  icon: <HelpCircle size={17} /> },
+        { href: "/admin", label: t("Admin"), icon: <LayoutDashboard size={17} /> },
+        { href: "/help",  label: t("Help"),  icon: <HelpCircle size={17} /> },
       ]
     : [
-        { href: "/dashboard",    label: "Home",         icon: <Home size={17} /> },
-        { href: "/transactions", label: "Transactions", icon: <ArrowLeftRight size={17} /> },
-        ...(isVendor ? [{ href: "/withdraw", label: "Wallet", icon: <Wallet size={17} /> }] : []),
-        { href: "/activity",     label: "Activity",     icon: <Activity size={17} /> },
-        { href: "/help",         label: "Help",         icon: <HelpCircle size={17} /> },
+        { href: "/dashboard",    label: t("Home"),         icon: <Home size={17} /> },
+        { href: "/transactions", label: t("Transactions"), icon: <ArrowLeftRight size={17} /> },
+        ...(isVendor ? [{ href: "/withdraw", label: t("Wallet"), icon: <Wallet size={17} /> }] : []),
+        { href: "/activity",     label: t("Activity"),     icon: <Activity size={17} /> },
+        { href: "/help",         label: t("Help"),         icon: <HelpCircle size={17} /> },
       ];
 
   const isActive = (href: string) =>
@@ -67,7 +70,7 @@ export default function Navbar({ user }: NavbarProps) {
   return (
     <nav className="nav" aria-label="Main">
       <div className="nav-inner">
-        <Link href={home} className="nav-logo" aria-label="Zola home">
+        <Link href={home} className="nav-logo" aria-label={t("Zola home")}>
           <Logo size={30} />
         </Link>
 
@@ -84,17 +87,18 @@ export default function Navbar({ user }: NavbarProps) {
         <div className="nav-right">
           {isVendor && (
             <Link href="/trade/new" className="btn btn-primary btn-sm nav-cta">
-              <Plus size={16} /> New transaction
+              <Plus size={16} /> {t("New transaction")}
             </Link>
           )}
 
           <NotificationBell />
+          <LangSwitch className="nav-lang" />
           <ThemeToggle />
 
           {/* Account menu */}
           <div className="nav-account" ref={menuRef}>
             <button className="nav-account-btn" onClick={() => setMenuOpen((o) => !o)}
-              aria-haspopup="menu" aria-expanded={menuOpen} aria-label="Account menu">
+              aria-haspopup="menu" aria-expanded={menuOpen} aria-label={t("Account menu")}>
               <span className="avatar">{initials}</span>
               <span className="nav-account-name">{name}</span>
               <ChevronDown size={16} />
@@ -103,23 +107,23 @@ export default function Navbar({ user }: NavbarProps) {
               <div className="nav-menu" role="menu">
                 <div className="nav-menu-head">
                   <p style={{ fontSize: 14.5, fontWeight: 700, color: "var(--navy)", lineHeight: 1.3 }}>{name}</p>
-                  <p style={{ fontSize: 13, color: "var(--ink-3)" }}>{roleLabel(user.role)} account</p>
+                  <p style={{ fontSize: 13, color: "var(--ink-3)" }}>{t(`${roleLabel(user.role)} account`)}</p>
                 </div>
                 <Link href="/profile" className="nav-menu-item" role="menuitem" onClick={() => setMenuOpen(false)}>
-                  <User size={16} /> Profile
+                  <User size={16} /> {t("Profile")}
                 </Link>
                 <Link href="/help" className="nav-menu-item" role="menuitem" onClick={() => setMenuOpen(false)}>
-                  <HelpCircle size={16} /> Help
+                  <HelpCircle size={16} /> {t("Help")}
                 </Link>
                 <button className="nav-menu-item" role="menuitem" onClick={() => { setMenuOpen(false); logout(); }}>
-                  <LogOut size={16} /> Sign out
+                  <LogOut size={16} /> {t("Sign out")}
                 </button>
               </div>
             )}
           </div>
 
           <button className="icon-btn nav-burger" onClick={() => setOpen((o) => !o)}
-            aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open}>
+            aria-label={open ? t("Close menu") : t("Open menu")} aria-expanded={open}>
             {open ? <X size={19} /> : <Menu size={19} />}
           </button>
         </div>
@@ -132,7 +136,7 @@ export default function Navbar({ user }: NavbarProps) {
             <span className="avatar">{initials}</span>
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 15, fontWeight: 700, color: "var(--navy)", lineHeight: 1.3 }}>{name}</p>
-              <p style={{ fontSize: 13, color: "var(--ink-3)" }}>{roleLabel(user.role)} account</p>
+              <p style={{ fontSize: 13, color: "var(--ink-3)" }}>{t(`${roleLabel(user.role)} account`)}</p>
             </div>
           </div>
           {navLinks.map((l) => (
@@ -142,16 +146,17 @@ export default function Navbar({ user }: NavbarProps) {
             </Link>
           ))}
           <Link href="/profile" onClick={() => setOpen(false)} className={`nav-link${isActive("/profile") ? " active" : ""}`}>
-            <User size={17} /> Profile
+            <User size={17} /> {t("Profile")}
           </Link>
+          <LangSwitch variant="row" />
           {isVendor && (
             <Link href="/trade/new" onClick={() => setOpen(false)} className="btn btn-primary" style={{ marginTop: 10 }}>
-              <Plus size={17} /> New transaction
+              <Plus size={17} /> {t("New transaction")}
             </Link>
           )}
           <button onClick={() => { setOpen(false); logout(); }} className="nav-link"
             style={{ background: "none", border: "none", cursor: "pointer", textAlign: "left", marginTop: 6, color: "var(--ink-3)" }}>
-            <LogOut size={17} /> Sign out
+            <LogOut size={17} /> {t("Sign out")}
           </button>
         </div>
       )}

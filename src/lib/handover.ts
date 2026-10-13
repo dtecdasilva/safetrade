@@ -17,7 +17,11 @@ import { SUPPORT } from "@/lib/support";
 export const DROP_OFF = "";
 
 /** How a seller gets the item to Zola. */
-export function handoverHow(): string {
+export function handoverHow(lang: "en" | "fr" = "en"): string {
+  if (lang === "fr")
+    return DROP_OFF
+      ? `Déposez-le à : ${DROP_OFF}.`
+      : `Écrivez sur WhatsApp au ${SUPPORT.whatsapp} ou appelez le ${SUPPORT.phone} pour organiser la remise.`;
   return DROP_OFF
     ? `Bring it to ${DROP_OFF}.`
     : `WhatsApp ${SUPPORT.whatsapp} or call ${SUPPORT.phone} to arrange the hand-over.`;

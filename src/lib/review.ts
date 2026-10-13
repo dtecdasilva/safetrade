@@ -104,13 +104,15 @@ export function reviewState(trade: ReviewFields, now: number = Date.now()): Revi
   };
 }
 
-/** "23 hours", "1 hour", "40 minutes", "less than a minute". */
-export function timeLeft(ms: number): string {
-  if (ms <= 0) return "no time";
+/** "23 hours", "1 hour", "40 minutes", "less than a minute" (or in French). */
+export function timeLeft(ms: number, lang: "en" | "fr" = "en"): string {
+  const fr = lang === "fr";
+  if (ms <= 0) return fr ? "plus de temps" : "no time";
   const mins = Math.ceil(ms / 60000);
-  if (mins < 2) return "less than a minute";
-  if (mins < 60) return `${mins} minutes`;
+  if (mins < 2) return fr ? "moins d'une minute" : "less than a minute";
+  if (mins < 60) return fr ? `${mins} minutes` : `${mins} minutes`;
   const hours = Math.round(mins / 60);
+  if (fr) return hours === 1 ? "1 heure" : `${hours} heures`;
   return hours === 1 ? "1 hour" : `${hours} hours`;
 }
 

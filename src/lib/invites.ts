@@ -15,7 +15,7 @@ import { sendEmail, emailLayout } from "@/lib/mail";
 import { notifyBuyerInvite } from "@/lib/whatsapp";
 import { notifyTradeMove } from "@/lib/notifications";
 import { feePercentOf, DELIVERY_NOTE } from "@/lib/fees";
-import { SUPPORT_LINE, prettyPhone, siteUrl } from "@/lib/support";
+import { supportLine, prettyPhone, siteUrl } from "@/lib/support";
 
 const INVITED_PREFIX = "invited:";
 export const INVITED_BUYER_NAME = "Invited buyer";
@@ -41,32 +41,52 @@ const fcfa = (n: unknown) => `FCFA ${(Number(n) || 0).toLocaleString("en-US")}`;
 export interface InviteResult { email: boolean; whatsapp: boolean; emailError?: string }
 
 /** Email and WhatsApp the buyer, asking them to sign up so they can pay. */
-export async function sendBuyerInvite(trade: any): Promise<InviteResult> {
+export async function sendBuyerInvite(trade: any, lang: "en" | "fr" = "en"): Promise<InviteResult> {
   const url      = inviteUrl(trade.id);
   const seller   = trade.vendor_name || "A seller";
   const total    = fcfa(trade.buyer_total || trade.amount);
   const delivery = Number(trade.delivery_fee) || 0;
 
+  const fr = lang === "fr";
   const rows: [string, string][] = [
-    ["Item", trade.title],
-    ["Item price", fcfa(trade.amount)],
-    [`Zola fee (${feePercentOf(trade)})`, fcfa(trade.fee)],
-    ...(delivery > 0 ? [["Delivery", fcfa(delivery)] as [string, string]] : []),
+    [fr ? "Article" : "Item", trade.title],
+    [fr ? "Prix de l'article" : "Item price", fcfa(trade.amount)],
+    [`${fr ? "Frais Zola" : "Zola fee"} (${feePercentOf(trade)})`, fcfa(trade.fee)],
+    ...(delivery > 0 ? [[fr ? "Livraison" : "Delivery", fcfa(delivery)] as [string, string]] : []),
   ];
-  const note =
-    "Zola is a secure way to buy from someone online. You pay Zola, not the seller, and we hold your payment until you confirm your order has arrived." +
-    (delivery > 0 ? ` ${DELIVERY_NOTE}` : "");
+  const note = fr
+    ? "Zola est un moyen sûr d'acheter à quelqu'un en ligne. Vous payez Zola, pas le vendeur, et nous gardons votre paiement jusqu'à ce que vous confirmiez l'arrivée de votre commande." +
+      (delivery > 0 ? " La livraison standard coûte FCFA 1,000. Si la livraison de votre article coûte plus cher, vous paierez la différence." : "")
+    : "Zola is a secure way to buy from someone online. You pay Zola, not the seller, and we hold your payment until you confirm your order has arrived." +
+      (delivery > 0 ? ` ${DELIVERY_NOTE}` : "");
 
   const [emailRes, waRes] = await Promise.all([
     trade.buyer_email
-      ? sendEmail({
+      ? sendEmail(fr ? {
+          to: trade.buyer_email,
+          subject: `${seller} vous invite à payer en sécurité avec Zola · ${trade.title}`,
+          text:
+            `Bonjour,\n\n${seller} a créé une transaction pour vous sur Zola : ${trade.title}, ${total} au total.\n\n` +
+            `Vous n'avez pas encore de compte Zola. Créez-en un (cela prend environ une minute), puis vous pourrez payer :\n${url}\n\n` +
+            `Inscrivez-vous avec ce numéro pour que la transaction vous attende : ${prettyPhone(trade.buyer_phone)}\n\n` +
+            `${note}\n\n${supportLine("fr")}\n\nZola\nTransactions sécurisées. Paiements simples.`,
+          html: emailLayout({
+            lang: "fr",
+            heading: `${seller} vous invite à payer en sécurité avec Zola`,
+            intro: `${seller} a créé une transaction pour vous. Vous n'avez pas encore de compte Zola : créez-en un d'abord (cela prend environ une minute). Ensuite, vous pourrez la vérifier et payer.`,
+            rows,
+            totalRow: ["Total à payer", total],
+            cta: { label: "Créer mon compte pour payer", url },
+            note,
+          }),
+        } : {
           to: trade.buyer_email,
           subject: `${seller} wants you to pay safely with Zola · ${trade.title}`,
           text:
             `Hello,\n\n${seller} created a transaction for you on Zola: ${trade.title}, ${total} in total.\n\n` +
             `You don't have a Zola account yet. Create one (it takes about a minute), then you can pay:\n${url}\n\n` +
             `Sign up with this phone number so the transaction is waiting for you: ${prettyPhone(trade.buyer_phone)}\n\n` +
-            `${note}\n\n${SUPPORT_LINE}\n\nZola\nSecure transactions. Simple payments.`,
+            `${note}\n\n${supportLine("en")}\n\nZola\nSecure transactions. Simple payments.`,
           html: emailLayout({
             heading: `${seller} wants you to pay safely with Zola`,
             intro: `${seller} created a transaction for you. You don't have a Zola account yet, so create one first (it takes about a minute). Then you can review it and pay.`,

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AuthShell from "@/components/AuthShell";
 import { PhoneField } from "@/components/ui";
+import { useT } from "@/components/I18n";
 
 const ROLES = [
   { val: "buyer",  label: "I'm buying",  note: "Pay through Zola. Your payment is held until you confirm delivery." },
@@ -13,6 +14,7 @@ const ROLES = [
 /** Shown once, to people signing up with Google, before their account is created. */
 export default function CompleteProfilePage() {
   const router = useRouter();
+  const { t } = useT();
   const [email, setEmail]     = useState("");
   const [form, setForm]       = useState({ name: "", role: "buyer", phone: "" });
   const [ready, setReady]     = useState(false);
@@ -56,47 +58,47 @@ export default function CompleteProfilePage() {
 
   return (
     <AuthShell>
-      <h1 className="auth-title">Finish setting up</h1>
+      <h1 className="auth-title">{t("Finish setting up")}</h1>
       <p className="auth-sub">
-        You&apos;re signing up as <strong style={{ color: "var(--navy)" }}>{email}</strong>. Two more details and you&apos;re in.
+        {t("You're signing up as")} <strong style={{ color: "var(--navy)" }}>{email}</strong>. {t("Two more details and you're in.")}
       </p>
 
-      <div className="seg" role="group" aria-label="Account type">
+      <div className="seg" role="group" aria-label={t("Account type")}>
         {ROLES.map((r) => (
           <button key={r.val} type="button" className="seg-item" aria-pressed={form.role === r.val}
             onClick={() => setForm((f) => ({ ...f, role: r.val }))}>
-            {r.label}
+            {t(r.label)}
           </button>
         ))}
       </div>
-      <p className="hint" style={{ margin: "10px 2px 20px" }}>{role.note}</p>
+      <p className="hint" style={{ margin: "10px 2px 20px" }}>{t(role.note)}</p>
 
-      {error && <div className="notice notice-danger" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && <div className="notice notice-danger" role="alert" style={{ marginBottom: 16 }}>{t(error)}</div>}
 
       <form onSubmit={handleSubmit} className="auth-form">
         <div className="field">
-          <label className="label" htmlFor="name">Full name</label>
+          <label className="label" htmlFor="name">{t("Full name")}</label>
           <input id="name" className="input" type="text" autoComplete="name"
             value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
         </div>
 
         <div className="field">
-          <label className="label" htmlFor="phone">WhatsApp number</label>
+          <label className="label" htmlFor="phone">{t("WhatsApp number")}</label>
           <PhoneField id="phone" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} required />
           <p className="hint">
             {form.role === "buyer"
-              ? "Sellers use this number to send you transactions. We also use it for updates."
-              : "We use this for transaction updates."}
+              ? t("Sellers use this number to send you transactions. We also use it for updates.")
+              : t("We use this for transaction updates.")}
           </p>
         </div>
 
         <button type="submit" disabled={loading || form.phone.length < 8 || !form.name.trim()} className="btn btn-primary btn-block" style={{ marginTop: 4 }}>
-          {loading ? "Creating account..." : `Create ${form.role === "vendor" ? "seller" : "buyer"} account`}
+          {loading ? t("Creating your account...") : form.role === "vendor" ? t("Create my seller account") : t("Create my buyer account")}
         </button>
       </form>
 
       <p className="auth-foot">
-        Not you? <Link href="/auth/login">Use a different account</Link>
+        {t("Not you?")} <Link href="/auth/login">{t("Use a different account")}</Link>
       </p>
     </AuthShell>
   );

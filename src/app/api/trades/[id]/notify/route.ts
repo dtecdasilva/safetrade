@@ -4,6 +4,7 @@ import { getDb, initDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { sendEmail, emailLayout } from "@/lib/mail";
 import { INVITE_RESEND_MINUTES, inviteSummary, sendBuyerInvite } from "@/lib/invites";
+import { siteUrl } from "@/lib/support";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -28,7 +29,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (Date.now() - last < INVITE_RESEND_MINUTES * 60000)
         return NextResponse.json({ error: `An invitation was sent a moment ago. You can send another in ${INVITE_RESEND_MINUTES} minutes.` }, { status: 429 });
 
-      const result  = await sendBuyerInvite({ ...trade, id: params.id });
+      const seller  = (await db.collection("users").doc(trade.vendor_id).get()).data();
+      const result  = await sendBuyerInvite({ ...trade, id: params.id }, seller?.lang === "fr" ? "fr" : "en");
       const summary = inviteSummary({ ...trade, id: params.id }, result);
       const now = new Date().toISOString();
       await db.collection("trades").doc(params.id).update({
@@ -48,19 +50,32 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const emailResult = await sendEmail({
+    const appUrl = siteUrl();
+    const buyerDoc = await db.collection("users").doc(trade.buyer_id).get();
+    const fr = buyerDoc.data()?.lang === "fr";
+    const payUrl = `${appUrl}/trade/${trade.id}`;
+    const price = `FCFA ${Number(trade.amount).toLocaleString("en-US")}`;
+    const emailResult = await sendEmail(fr ? {
+      to: trade.buyer_email,
+      subject: `Zola : rappel de paiement pour « ${trade.title} »`,
+      text: `Bonjour ${trade.buyer_name},\n\nPetit rappel : ${session.name} a créé une transaction pour vous sur Zola.\n\nArticle : ${trade.title}\nPrix de l'article : ${price}\n\nVérifier et payer en sécurité : ${payUrl}\n\nVous payez Zola, pas le vendeur. Nous gardons votre paiement jusqu'à votre confirmation de livraison.\n\nZola\nTransactions sécurisées. Paiements simples.`,
+      html: emailLayout({
+        lang: "fr",
+        heading: "Une transaction attend votre paiement",
+        intro: `Bonjour ${trade.buyer_name}, petit rappel : ${session.name} a créé une transaction pour vous sur Zola.`,
+        rows: [["Article", trade.title], ["Prix de l'article", price]],
+        cta: { label: "Vérifier et payer en sécurité", url: payUrl },
+        note: "Vous payez Zola, pas le vendeur. Nous gardons votre paiement jusqu'à votre confirmation de livraison.",
+      }),
+    } : {
       to: trade.buyer_email,
       subject: `Zola: Reminder to pay for "${trade.title}"`,
-      text: `Hi ${trade.buyer_name},\n\nThis is a reminder that ${session.name} created a transaction for you on Zola.\n\nItem: ${trade.title}\nItem price: FCFA ${trade.amount.toLocaleString()}\n\nReview and pay securely: ${appUrl}/trade/${trade.id}\n\nYou pay Zola, not the seller. We hold your payment until you confirm delivery.\n\nZola\nSecure transactions. Simple payments.`,
+      text: `Hi ${trade.buyer_name},\n\nThis is a reminder that ${session.name} created a transaction for you on Zola.\n\nItem: ${trade.title}\nItem price: ${price}\n\nReview and pay securely: ${payUrl}\n\nYou pay Zola, not the seller. We hold your payment until you confirm delivery.\n\nZola\nSecure transactions. Simple payments.`,
       html: emailLayout({
         heading: "A transaction is waiting for your payment",
         intro: `Hi ${trade.buyer_name}, this is a reminder that ${session.name} created a transaction for you on Zola.`,
-        rows: [
-          ["Item", trade.title],
-          ["Item price", `FCFA ${trade.amount.toLocaleString()}`],
-        ],
-        cta: { label: "Review and pay securely", url: `${appUrl}/trade/${trade.id}` },
+        rows: [["Item", trade.title], ["Item price", price]],
+        cta: { label: "Review and pay securely", url: payUrl },
         note: "You pay Zola, not the seller. We hold your payment until you confirm delivery.",
       }),
     });

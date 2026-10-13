@@ -1,12 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import { MoneyRail, Pill } from "@/components/ui";
+import { useT } from "@/components/I18n";
 
 /**
  * The example transaction on the home page. It loads as "payment pending"
  * and, a moment later, shows the payment arriving safely with Zola.
  */
 export default function HeroCard() {
+  const { t } = useT();
   const [paid, setPaid] = useState(false);
 
   useEffect(() => {
@@ -19,11 +21,11 @@ export default function HeroCard() {
     <div className="hero-stage">
       <div className="hero-card">
         <div className="hero-card-top">
-          <Pill tone={paid ? "ok" : "wait"}>{paid ? "Paid" : "Payment pending"}</Pill>
-          <span className="tx-id">Transaction ID <strong>8F3A2B1C</strong></span>
+          <Pill tone={paid ? "ok" : "wait"}>{paid ? t("Paid") : t("Payment pending")}</Pill>
+          <span className="tx-id">{t("Transaction ID")} <strong>8F3A2B1C</strong></span>
         </div>
         <p style={{ fontSize: 15, fontWeight: 600, color: "var(--ink-2)", margin: "18px 0 2px" }}>
-          Wireless headphones, new in box
+          {t("Wireless headphones, new in box")}
         </p>
         <p className="hero-amount">FCFA 185,000</p>
 
@@ -31,17 +33,17 @@ export default function HeroCard() {
           <MoneyRail at={paid ? "zola" : "buyer"} />
         </div>
         <p className={`hero-where ${paid ? "is-held" : "is-waiting"}`} aria-live="polite">
-          {paid ? "FCFA 185,000 is safely held by Zola" : "Waiting for the buyer to pay Zola"}
+          {paid ? t("{held} is safely held by Zola.", { held: "FCFA 185,000" }).replace(/\.$/, "") : t("Waiting for the buyer to pay Zola")}
         </p>
 
         <div className="answers" style={{ marginTop: 18 }}>
           <div className="answer">
-            <p className="answer-q">What happens next</p>
-            <p className="answer-a">{paid ? "The seller ships the order." : "The buyer pays Zola."}</p>
+            <p className="answer-q">{t("What happens next")}</p>
+            <p className="answer-a">{paid ? t("The seller sends the item to Zola.") : t("The buyer pays Zola.")}</p>
           </div>
           <div className="answer">
-            <p className="answer-q">Who needs to act</p>
-            <p className="answer-a">{paid ? "The seller" : "The buyer"}</p>
+            <p className="answer-q">{t("Who needs to act")}</p>
+            <p className="answer-a">{paid ? t("The seller") : t("The buyer")}</p>
           </div>
         </div>
       </div>

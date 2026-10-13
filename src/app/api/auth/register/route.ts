@@ -5,11 +5,13 @@ import { getDb, initDb } from "@/lib/db";
 import { createToken, SessionUser } from "@/lib/auth";
 import { cleanPhone as normalizePhone, phoneInUse, PHONE_TAKEN } from "@/lib/users";
 import { claimInvitedTrades } from "@/lib/invites";
+import { normalizeLang } from "@/lib/i18n/core";
+import { getLang } from "@/lib/i18n/server";
 
 export async function POST(req: NextRequest) {
   try {
     await initDb();
-    const { name, email, password, role, phone, sells, invite } = await req.json();
+    const { name, email, password, role, phone, sells, invite, lang } = await req.json();
 
     if (!name || !email || !password || !role)
       return NextResponse.json({ error: "Please fill in all the fields" }, { status: 400 });
@@ -44,6 +46,8 @@ export async function POST(req: NextRequest) {
       role,
       avatar,
       phone:       cleanPhone,
+      // Emails and notifications are sent in this language
+      lang:        normalizeLang(lang) || getLang(),
       // From the signup questions: "goods", "services" or "both" (sellers only)
       ...(role === "vendor" && ["goods", "services", "both"].includes(sells) ? { sells } : {}),
       rating:      5.0,

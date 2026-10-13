@@ -5,6 +5,7 @@ import { getDb, initDb } from "@/lib/db";
 import { createToken, verifyTemp, SessionUser } from "@/lib/auth";
 import { phoneInUse, PHONE_TAKEN } from "@/lib/users";
 import { claimInvitedTrades } from "@/lib/invites";
+import { getLang } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,7 @@ export async function POST(req: NextRequest) {
       rating:        5.0,
       trade_count:   0,
       google_id:     pending.sub,
+      lang:          getLang(),
       auth_provider: "google",
       created_at:    new Date().toISOString(),
     });

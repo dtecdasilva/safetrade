@@ -2,11 +2,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, X } from "lucide-react";
+import { useT } from "@/components/I18n";
+import { Lang, locale } from "@/lib/i18n/core";
 
 interface Notice {
   id: string;
   title: string;
   body: string;
+  title_fr?: string;
+  body_fr?: string;
   link?: string;
   tone?: string;
   trade_id?: string;
@@ -16,18 +20,23 @@ interface Notice {
 
 const POLL_MS = 20000;
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, lang: Lang): string {
   const t = new Date(iso).getTime();
   if (isNaN(t)) return "";
+  const fr = lang === "fr";
   const mins = Math.floor((Date.now() - t) / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 1) return fr ? "À l'instant" : "Just now";
+  if (mins < 60) return fr ? `Il y a ${mins} min` : `${mins} min ago`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} h ago`;
+  if (hours < 24) return fr ? `Il y a ${hours} h` : `${hours} h ago`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  if (days < 7) return fr ? `Il y a ${days} jour${days === 1 ? "" : "s"}` : `${days} day${days === 1 ? "" : "s"} ago`;
+  return new Date(iso).toLocaleDateString(locale(lang), { day: "numeric", month: "short" });
 }
+
+/** A notification in the reader's language (older ones exist in English only). */
+const titleOf = (n: Notice, lang: Lang) => (lang === "fr" && n.title_fr) || n.title;
+const bodyOf  = (n: Notice, lang: Lang) => (lang === "fr" && n.body_fr) || n.body;
 
 /**
  * The bell in the top bar. It checks for new notifications every 20 seconds
@@ -37,6 +46,7 @@ function timeAgo(iso: string): string {
  */
 export default function NotificationBell() {
   const router = useRouter();
+  const { t, lang } = useT();
   const [items, setItems]   = useState<Notice[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen]     = useState(false);
@@ -127,22 +137,22 @@ export default function NotificationBell() {
     <div className="bell" ref={wrapRef}>
       <button type="button" className="icon-btn" onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog" aria-expanded={open}
-        aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}>
+        aria-label={unread ? t("Notifications, {n} unread", { n: unread }) : t("Notifications")}>
         <Bell size={18} />
         {unread > 0 && <span className="bell-count" aria-hidden="true">{unread > 9 ? "9+" : unread}</span>}
       </button>
 
       {open && (
-        <div className="bell-panel" role="dialog" aria-label="Notifications">
+        <div className="bell-panel" role="dialog" aria-label={t("Notifications")}>
           <div className="bell-head">
-            <h2 className="section-title">Notifications</h2>
-            {unread > 0 && <button type="button" className="link-btn" style={{ fontSize: 13.5 }} onClick={markAllRead}>Mark all as read</button>}
+            <h2 className="section-title">{t("Notifications")}</h2>
+            {unread > 0 && <button type="button" className="link-btn" style={{ fontSize: 13.5 }} onClick={markAllRead}>{t("Mark all as read")}</button>}
           </div>
 
           {items.length === 0 ? (
             <div className="bell-empty">
-              <p className="empty-title" style={{ fontSize: 15 }}>Nothing yet</p>
-              <p className="empty-text" style={{ fontSize: 14 }}>You&apos;ll be told here each time one of your transactions moves.</p>
+              <p className="empty-title" style={{ fontSize: 15 }}>{t("Nothing yet")}</p>
+              <p className="empty-text" style={{ fontSize: 14 }}>{t("You'll be told here each time one of your transactions moves.")}</p>
             </div>
           ) : (
             <ul className="bell-list">
@@ -151,9 +161,9 @@ export default function NotificationBell() {
                   <button type="button" className={`bell-item${n.read ? "" : " is-unread"}`} onClick={() => openNotice(n)}>
                     <span className={`bell-dot t-${n.tone || "info"}`} aria-hidden="true" />
                     <span style={{ minWidth: 0 }}>
-                      <span className="bell-title">{n.title}</span>
-                      <span className="bell-body">{n.body}</span>
-                      <span className="bell-time" suppressHydrationWarning>{timeAgo(n.created_at)}</span>
+                      <span className="bell-title">{titleOf(n, lang)}</span>
+                      <span className="bell-body">{bodyOf(n, lang)}</span>
+                      <span className="bell-time" suppressHydrationWarning>{timeAgo(n.created_at, lang)}</span>
                     </span>
                   </button>
                 </li>
@@ -168,16 +178,16 @@ export default function NotificationBell() {
         <div className="bell-alert" role="status" aria-live="polite">
           <span className={`bell-dot t-${alert.tone || "info"}`} aria-hidden="true" />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <p className="bell-title">{alert.title}</p>
-            <p className="bell-body">{alert.body}</p>
+            <p className="bell-title">{titleOf(alert, lang)}</p>
+            <p className="bell-body">{bodyOf(alert, lang)}</p>
             {alert.link && (
               <button type="button" className="link-btn" style={{ fontSize: 13.5, marginTop: 6 }} onClick={() => openNotice(alert)}>
-                View
+                {t("View")}
               </button>
             )}
           </div>
           <button type="button" className="input-affix" style={{ position: "static", transform: "none", flexShrink: 0 }}
-            onClick={() => setAlert(null)} aria-label="Dismiss">
+            onClick={() => setAlert(null)} aria-label={t("Dismiss")}>
             <X size={16} />
           </button>
         </div>

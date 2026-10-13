@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { themeInitScript } from "@/lib/theme";
 import PwaSetup from "@/components/PwaSetup";
+import { I18nProvider } from "@/components/I18n";
+import { getLang } from "@/lib/i18n/server";
 
 export const metadata: Metadata = {
   title: {
@@ -31,15 +33,18 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const lang = getLang();
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={lang} suppressHydrationWarning>
       <head>
         {/* Applies the saved or device theme before first paint */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
-        {children}
-        <PwaSetup />
+        <I18nProvider lang={lang}>
+          {children}
+          <PwaSetup />
+        </I18nProvider>
         <script type="text/javascript" src="https://www.monetbil.com/widget/v2/monetbil.min.js"></script>
       </body>
     </html>

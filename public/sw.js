@@ -9,7 +9,7 @@
  * It never touches /api/ addresses, so sign-in (including Google) and
  * payment hand-offs go straight to the server exactly as they would without it.
  */
-const CACHE = "zola-offline-v4";
+const CACHE = "zola-offline-v5";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {

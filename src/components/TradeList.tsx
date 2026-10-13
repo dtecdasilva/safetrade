@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Search, X, Clock } from "lucide-react";
 import TxRow from "@/components/TxRow";
+import { useT } from "@/components/I18n";
 import { statusMeta } from "@/lib/zola";
 
 type Filter = "all" | "active" | "completed";
@@ -17,6 +18,8 @@ export default function TradeList({
   role: string;
   pendingRelease: number;
 }) {
+  const { t } = useT();
+  const tr = t;
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const q = search.toLowerCase().trim();
@@ -34,14 +37,15 @@ export default function TradeList({
         t.vendor_name?.toLowerCase().includes(q) ||
         t.status?.toLowerCase().includes(q) ||
         statusMeta(t.status).label.toLowerCase().includes(q) ||
+        tr(statusMeta(t.status).label).toLowerCase().includes(q) ||
         String(t.amount).includes(q)
       )
     : inFilter;
 
   const FILTERS: { key: Filter; label: string }[] = [
-    { key: "all",       label: `All (${trades.length})` },
-    { key: "active",    label: `Active (${active.length})` },
-    { key: "completed", label: `Completed (${completed.length})` },
+    { key: "all",       label: t("All ({n})", { n: trades.length }) },
+    { key: "active",    label: t("Active ({n})", { n: active.length }) },
+    { key: "completed", label: t("Completed ({n})", { n: completed.length }) },
   ];
 
   return (
@@ -50,7 +54,9 @@ export default function TradeList({
         <div className="notice notice-ok" style={{ marginBottom: 16 }}>
           <Clock size={16} />
           <span>
-            {pendingRelease} transaction{pendingRelease > 1 ? "s" : ""} under review. Zola holds the payment for 24 hours after delivery is confirmed, then releases it.
+            {pendingRelease > 1
+              ? t("{n} transactions under review. Zola holds the payment for 24 hours after delivery is confirmed, then releases it.", { n: pendingRelease })
+              : t("1 transaction under review. Zola holds the payment for 24 hours after delivery is confirmed, then releases it.")}
           </span>
         </div>
       )}
@@ -62,16 +68,16 @@ export default function TradeList({
             className="input"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by item, name, status, amount or ID"
-            aria-label="Search transactions"
+            placeholder={t("Search by item, name, status, amount or ID")}
+            aria-label={t("Search transactions")}
           />
           {search && (
-            <button className="search-clear" onClick={() => setSearch("")} aria-label="Clear search">
+            <button className="search-clear" onClick={() => setSearch("")} aria-label={t("Clear search")}>
               <X size={16} />
             </button>
           )}
         </div>
-        <div className="seg" role="group" aria-label="Filter transactions">
+        <div className="seg" role="group" aria-label={t("Filter transactions")}>
           {FILTERS.map(f => (
             <button key={f.key} className="seg-item" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
               {f.label}
@@ -82,7 +88,7 @@ export default function TradeList({
 
       {q && (
         <p className="hint" style={{ marginBottom: 10 }}>
-          {shown.length} result{shown.length !== 1 ? "s" : ""} for &ldquo;{search}&rdquo;
+          {shown.length === 1 ? t("1 result for “{q}”", { q: search }) : t("{n} results for “{q}”", { n: shown.length, q: search })}
         </p>
       )}
 
@@ -94,17 +100,17 @@ export default function TradeList({
         <div className="card empty">
           {trades.length === 0 ? (
             <>
-              <p className="empty-title">No transactions yet</p>
+              <p className="empty-title">{t("No transactions yet")}</p>
               <p className="empty-text">
                 {role === "buyer"
-                  ? "When a seller creates a transaction for your number, it will appear here."
-                  : "Create a transaction and Zola will notify the buyer."}
+                  ? t("When a seller creates a transaction for your number, it will appear here.")
+                  : t("Create a transaction and Zola will notify the buyer.")}
               </p>
             </>
           ) : (
             <>
-              <p className="empty-title">Nothing matches</p>
-              <p className="empty-text">Try a different search, or switch the filter to All.</p>
+              <p className="empty-title">{t("Nothing matches")}</p>
+              <p className="empty-text">{t("Try a different search, or switch the filter to All.")}</p>
             </>
           )}
         </div>

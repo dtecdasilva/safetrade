@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "crypto";
-import { getDb } from "@/lib/db";
-import { getPaymentStatus } from "@/lib/fapshi";
-import { notifyTradeMove } from "@/lib/notifications";
+import { confirmPayment } from "@/lib/payments";
 
 /**
  * Fapshi sends one static webhook URL per service (set in the Fapshi
@@ -26,69 +23,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // Re-fetch status from Fapshi directly rather than trusting the payload
-    const check = await getPaymentStatus(transId);
-    if (!check.success) {
-      console.error("[fapshi-webhook] could not verify status:", check.error);
-      return NextResponse.json({ ok: true });
-    }
-
-    const status = check.data?.status;
-    console.log("[fapshi-webhook] verified status:", status, "trade:", tradeId);
-
-    if (status !== "SUCCESSFUL") {
-      console.log("[fapshi-webhook] payment not successful, status was:", status);
-      // The attempt is over: let the seller edit the transaction again straight away
-      if (status === "FAILED" || status === "EXPIRED") {
-        try {
-          const ref = getDb().collection("trades").doc(tradeId);
-          const doc = await ref.get();
-          if (doc.exists && doc.data()!.status === "pending_payment") await ref.update({ payment_started_at: null });
-        } catch (e: any) {
-          console.error("[fapshi-webhook] could not clear payment attempt:", e.message);
-        }
-      }
-      return NextResponse.json({ ok: true });
-    }
-
-    const db = getDb();
-    const tradeDoc = await db.collection("trades").doc(tradeId).get();
-
-    if (!tradeDoc.exists) {
-      console.error("[fapshi-webhook] trade not found:", tradeId);
-      return NextResponse.json({ ok: true });
-    }
-
-    const trade = tradeDoc.data()!;
-
-    if (trade.status !== "pending_payment") {
-      console.log("[fapshi-webhook] trade already processed, status:", trade.status);
-      return NextResponse.json({ ok: true });
-    }
-
-    const deadline = new Date();
-    deadline.setDate(deadline.getDate() + (trade.delivery_days || 7));
-
-    await db.collection("trades").doc(tradeId).update({
-      status:             "funds_held",
-      delivery_deadline:  deadline.toISOString(),
-      fapshi_ref:         transId,
-      updated_at:         new Date().toISOString(),
-    });
-
-    const eventId = randomUUID();
-    await db.collection("trade_events").doc(eventId).set({
-      id:         eventId,
-      trade_id:   tradeId,
-      label:      "Payment confirmed",
-      detail:     `FCFA ${Number(trade.amount).toLocaleString()} safely held by Zola`,
-      type:       "success",
-      created_at: new Date().toISOString(),
-    });
-
-    await notifyTradeMove("paid", { ...(trade as any), id: tradeId });
-
-    console.log("[fapshi-webhook] ✓ trade updated to funds_held:", tradeId);
+    // Ask Fapshi directly rather than trusting the payload, then apply the same
+    // rules as the buyer's "Check payment" button (see lib/payments.ts)
+    const { result, detail } = await confirmPayment(String(tradeId), String(transId));
+    console.log("[fapshi-webhook]", tradeId, "->", result, detail || "");
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     console.error("[fapshi-webhook] error:", e.message, e.stack);

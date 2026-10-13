@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { ZolaMark } from "@/components/Logo";
+import { useT } from "@/components/I18n";
 
 const DISMISS_KEY = "zola-install-dismissed";
 
@@ -15,6 +16,7 @@ const DISMISS_KEY = "zola-install-dismissed";
  *    iOS has no install prompt. Once dismissed or installed it stays away.
  */
 export default function PwaSetup() {
+  const { t } = useT();
   const [promptEvent, setPromptEvent] = useState<any>(null);
   const [mode, setMode] = useState<"hidden" | "android" | "ios">("hidden");
 
@@ -63,21 +65,21 @@ export default function PwaSetup() {
   if (mode === "hidden") return null;
 
   return (
-    <div className="install-bar" role="region" aria-label="Install Zola">
+    <div className="install-bar" role="region" aria-label={t("Install Zola")}>
       <span className="install-icon"><ZolaMark size={24} color="#fff" /></span>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <p className="install-title">Add Zola to your home screen</p>
+        <p className="install-title">{t("Add Zola to your home screen")}</p>
         <p className="install-text">
           {mode === "android"
-            ? "Open it like an app, with one tap."
-            : "Tap the Share button, then “Add to Home Screen”."}
+            ? t("Open it like an app, with one tap.")
+            : t("Tap the Share button, then “Add to Home Screen”.")}
         </p>
       </div>
       {mode === "android" && (
-        <button type="button" className="btn btn-primary btn-sm" onClick={install}>Install</button>
+        <button type="button" className="btn btn-primary btn-sm" onClick={install}>{t("Install")}</button>
       )}
       <button type="button" className="input-affix" style={{ position: "static", transform: "none", flexShrink: 0 }}
-        onClick={dismiss} aria-label="Not now">
+        onClick={dismiss} aria-label={t("Not now")}>
         <X size={17} />
       </button>
     </div>

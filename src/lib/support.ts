@@ -27,6 +27,8 @@ export const SUPPORT = {
 
 /** One-line version for emails and plain-text messages. */
 export const SUPPORT_LINE = `Need help? WhatsApp ${SUPPORT.whatsapp} or call ${SUPPORT.phone}.`;
+export const SUPPORT_LINE_FR = `Besoin d'aide ? WhatsApp ${SUPPORT.whatsapp} ou appelez le ${SUPPORT.phone}.`;
+export const supportLine = (lang: "en" | "fr" = "en") => (lang === "fr" ? SUPPORT_LINE_FR : SUPPORT_LINE);
 
 /** Digits only, with the country code: 671543308 -> 237671543308. */
 export function intlDigits(phone: string | undefined | null): string {

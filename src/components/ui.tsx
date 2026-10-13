@@ -1,7 +1,10 @@
+"use client";
 import React from "react";
 import { User, Store, Check } from "lucide-react";
 import { ZolaMark } from "@/components/Logo";
-import { MoneyAt, STEPS, Tone, brandText, fmtDateTime, statusMeta } from "@/lib/zola";
+import { MoneyAt, STEPS, Tone, fmtDateTime, statusMeta } from "@/lib/zola";
+import { useT } from "@/components/I18n";
+import { translateEventText } from "@/lib/i18n/events";
 
 /* ── Status pill ─────────────────────────────────────────────────────────── */
 
@@ -10,8 +13,9 @@ export function Pill({ tone, children }: { tone: Tone; children: React.ReactNode
 }
 
 export function StatusPill({ status }: { status: string }) {
+  const { t } = useT();
   const s = statusMeta(status);
-  return <Pill tone={s.tone}>{s.label}</Pill>;
+  return <Pill tone={s.tone}>{t(s.label)}</Pill>;
 }
 
 /* ── Loading ─────────────────────────────────────────────────────────────── */
@@ -68,6 +72,7 @@ export function MoneyRail({
   mini?: boolean;
   names?: { buyer?: string; seller?: string };
 }) {
+  const { t } = useT();
   const paid     = at === "zola" || at === "seller";
   const released = at === "seller";
 
@@ -77,20 +82,20 @@ export function MoneyRail({
 
   const icon = mini ? 14 : 19;
   const label = (side: "buyer" | "seller", fallback: string) =>
-    you === side ? "You" : names?.[side] || fallback;
+    you === side ? t("You") : names?.[side] || t(fallback);
 
   const summary =
-    at === "zola" ? "The money is with Zola"
-    : at === "seller" ? "The money is with the seller"
-    : at === "buyer" ? "The money is still with the buyer"
-    : "No money is being held";
+    at === "zola" ? t("The money is with Zola")
+    : at === "seller" ? t("The money is with the seller")
+    : at === "buyer" ? t("The money is still with the buyer")
+    : t("No money is being held");
 
   return (
     <div className={`rail${mini ? " rail-mini" : ""}`} role="img" aria-label={summary}>
       <div className={`rail-node ${buyerState}`}>
         <span className="rail-dot"><User size={icon} strokeWidth={2} /></span>
         <span className="rail-name">{label("buyer", "Buyer")}</span>
-        {!mini && (you === "buyer" || names?.buyer) && <span className="rail-note">Buyer</span>}
+        {!mini && (you === "buyer" || names?.buyer) && <span className="rail-note">{t("Buyer")}</span>}
       </div>
       <div className={`rail-link${paid ? " is-done" : ""}`} />
       <div className={`rail-node ${zolaState}`}>
@@ -101,7 +106,7 @@ export function MoneyRail({
       <div className={`rail-node ${sellerState}`}>
         <span className="rail-dot"><Store size={icon} strokeWidth={2} /></span>
         <span className="rail-name">{label("seller", "Seller")}</span>
-        {!mini && (you === "seller" || names?.seller) && <span className="rail-note">Seller</span>}
+        {!mini && (you === "seller" || names?.seller) && <span className="rail-note">{t("Seller")}</span>}
       </div>
     </div>
   );
@@ -110,9 +115,10 @@ export function MoneyRail({
 /* ── Progress steps ──────────────────────────────────────────────────────── */
 
 export function Steps({ step }: { step: number }) {
+  const { t } = useT();
   if (step <= 0) return null;
   return (
-    <ol className="steps" aria-label="Transaction progress">
+    <ol className="steps" aria-label={t("Transaction progress")}>
       {STEPS.map((label, i) => {
         const n = i + 1;
         const done = step > n || step === STEPS.length;
@@ -124,7 +130,7 @@ export function Steps({ step }: { step: number }) {
             aria-current={active ? "step" : undefined}
           >
             <span className="step-dot">{done ? <Check size={13} strokeWidth={3} /> : n}</span>
-            <span className="step-label">{label}</span>
+            <span className="step-label">{t(label)}</span>
           </li>
         );
       })}
@@ -145,6 +151,7 @@ export interface TimelineEvent {
 }
 
 export function Timeline({ events }: { events: TimelineEvent[] }) {
+  const { lang } = useT();
   return (
     <ol className="timeline">
       {events.map((ev) => (
@@ -152,11 +159,11 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
           <span className={`timeline-dot t-${ev.type || "info"}`} aria-hidden="true" />
           <div style={{ minWidth: 0 }}>
             {ev.context}
-            <p className="timeline-label">{brandText(ev.label)}</p>
-            {ev.detail && <p className="timeline-detail">{brandText(ev.detail)}</p>}
+            <p className="timeline-label">{translateEventText(lang, ev.label)}</p>
+            {ev.detail && <p className="timeline-detail">{translateEventText(lang, ev.detail)}</p>}
             {ev.created_at && (
               <time className="timeline-time" dateTime={ev.created_at} suppressHydrationWarning>
-                {fmtDateTime(ev.created_at)}
+                {fmtDateTime(ev.created_at, lang)}
               </time>
             )}
           </div>

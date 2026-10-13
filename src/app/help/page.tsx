@@ -6,8 +6,11 @@ import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
 import HowItWorks from "@/components/HowItWorks";
 import { SupportCard } from "@/components/Support";
 import { SUPPORT } from "@/lib/support";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Help" };
+export function generateMetadata(): Metadata {
+  return { title: getT().t("Help") };
+}
 
 const FAQ: { q: string; a: string[] }[] = [
   {
@@ -46,6 +49,7 @@ const FAQ: { q: string; a: string[] }[] = [
     q: "How do I pay?",
     a: [
       "Open the transaction, choose MTN Mobile Money or Orange Money, and enter your number. A payment prompt is sent to your phone. Approve it, and the page updates once the payment is confirmed.",
+      "Paid, but the transaction still says Payment pending? Press Check payment on the transaction and Zola asks the mobile money provider directly.",
     ],
   },
   {
@@ -88,8 +92,91 @@ const FAQ: { q: string; a: string[] }[] = [
   },
 ];
 
+
+const FAQ_FR: { q: string; a: string[] }[] = [
+  {
+    q: "Où est mon argent pendant une transaction ?",
+    a: [
+      "Chez Zola. Quand l'acheteur paie, l'argent va chez Zola et y reste. Le vendeur voit que la transaction est payée, mais l'argent ne lui est versé qu'après la confirmation de livraison par l'acheteur et les 24 heures de vérification qui suivent.",
+      "Chaque page de transaction indique où est l'argent, la suite, et qui doit agir.",
+    ],
+  },
+  {
+    q: "Combien coûte Zola ?",
+    a: [
+      "Zola prend 8 % du prix de l'article, ou 5 % quand l'article coûte plus de FCFA 50,000. La livraison coûte FCFA 1,000. Les deux sont ajoutés au total de l'acheteur et affichés avant le paiement. Le vendeur reçoit la totalité du prix de l'article.",
+      "Par exemple, un article à FCFA 30,000 a FCFA 2,400 de frais, et un article à FCFA 100,000 a FCFA 5,000 de frais.",
+      "Les frais de livraison ne s'appliquent que s'il y a quelque chose à livrer. Pour un service, ou un article que le vendeur remet lui-même, le vendeur désactive la livraison et seuls les frais Zola sont ajoutés.",
+      "Les FCFA 1,000 couvrent une livraison standard. Si la livraison de votre article coûte plus cher, vous paierez la différence.",
+    ],
+  },
+  {
+    q: "Comment se passe la livraison ?",
+    a: [
+      "Le vendeur n'envoie pas l'article directement à l'acheteur. Une fois que l'acheteur a payé, le vendeur remet l'article à Zola, et Zola le livre à l'acheteur.",
+      `C'est l'acheteur qui paie la livraison, pas le vendeur. Pour organiser la remise, le vendeur écrit sur WhatsApp au ${SUPPORT.whatsapp} ou appelle le ${SUPPORT.phone}.`,
+      "Pour un service, ou tout ce qui n'a rien à livrer, le vendeur désactive la livraison et indique simplement que le travail est livré.",
+    ],
+  },
+  {
+    q: "Comment démarrer une transaction ?",
+    a: [
+      "Le vendeur crée la transaction avec l'article, le prix, le délai de livraison et le numéro de téléphone de l'acheteur.",
+      "Si l'acheteur a déjà un compte Zola avec ce numéro, Zola le prévient : il vérifie les détails et paie.",
+      "Si l'acheteur n'est pas encore sur Zola, le vendeur ajoute son e-mail. Zola invite l'acheteur par e-mail et WhatsApp à créer un compte, et la transaction l'attend une fois inscrit.",
+    ],
+  },
+  {
+    q: "Comment payer ?",
+    a: [
+      "Ouvrez la transaction, choisissez MTN Mobile Money ou Orange Money, et entrez votre numéro. Une demande de paiement arrive sur votre téléphone. Validez-la, et la page se met à jour dès que le paiement est confirmé.",
+      "Vous avez payé mais la transaction indique toujours Paiement en attente ? Appuyez sur Vérifier le paiement sur la transaction : Zola demande directement à l'opérateur.",
+    ],
+  },
+  {
+    q: "Quand le vendeur est-il payé ?",
+    a: [
+      "Quand l'acheteur confirme la livraison, la transaction est en vérification pendant 24 heures. Zola vérifie auprès de l'acheteur et, si aucun problème n'est signalé, le paiement est versé dans le portefeuille Zola du vendeur. Le vendeur peut ensuite le retirer vers un numéro Mobile Money.",
+    ],
+  },
+  {
+    q: "Et si ma commande n'arrive pas, ou ne correspond pas à ce qui était convenu ?",
+    a: [
+      "Ne confirmez pas la livraison. Ouvrez plutôt un litige depuis la page de la transaction. Votre paiement reste bloqué chez Zola pendant l'examen.",
+    ],
+  },
+  {
+    q: "J'ai confirmé la livraison, puis j'ai trouvé un problème. Que faire ?",
+    a: [
+      "Vous avez 24 heures après la confirmation. Ouvrez la transaction, choisissez Faire une réclamation et expliquez le problème. Votre paiement reste bloqué, et Zola vous appellera ou vous écrira.",
+      "Zola peut aussi vous appeler ou vous écrire pendant ces 24 heures, simplement pour vérifier que la commande est arrivée comme convenu.",
+      `Après 24 heures, le paiement est versé au vendeur. Si vous avez encore besoin d'aide, écrivez sur WhatsApp au ${SUPPORT.whatsapp} ou appelez le ${SUPPORT.phone}.`,
+    ],
+  },
+  {
+    q: "Comment joindre le service client ?",
+    a: [
+      `Écrivez-nous sur WhatsApp au ${SUPPORT.whatsapp}, ou appelez le ${SUPPORT.phone}. S'il s'agit d'une transaction, ayez son ID sous la main : il se trouve en haut de la page de la transaction.`,
+    ],
+  },
+  {
+    q: "Peut-on modifier ou supprimer une transaction ?",
+    a: [
+      "Le vendeur peut modifier ou supprimer une transaction jusqu'au paiement de l'acheteur. Une fois payée, elle est verrouillée et ne peut plus changer, pour que chacun s'en tienne au même accord. Elle est aussi verrouillée quelques minutes pendant un paiement en cours.",
+    ],
+  },
+  {
+    q: "Comment fonctionnent les retraits ?",
+    a: [
+      "Les vendeurs demandent un retrait depuis la page Portefeuille, dans la limite de leur solde disponible. Zola l'envoie au numéro Mobile Money indiqué. Un seul retrait peut être en cours à la fois.",
+    ],
+  },
+];
+
 export default async function HelpPage() {
   const session = await getSession();
+  const { t, lang } = getT();
+  const faq = lang === "fr" ? FAQ_FR : FAQ;
 
   return (
     <div className="page">
@@ -97,9 +184,9 @@ export default async function HelpPage() {
 
       <main className="container main">
         <div style={{ maxWidth: 640, marginBottom: 36 }}>
-          <h1 className="page-title">Help</h1>
+          <h1 className="page-title">{t("Help")}</h1>
           <p className="lead" style={{ marginTop: 8 }}>
-            Zola protects both buyers and sellers by securely holding payment until the transaction is completed.
+            {t("Zola protects both buyers and sellers by securely holding payment until the transaction is completed.")}
           </p>
         </div>
 
@@ -108,14 +195,14 @@ export default async function HelpPage() {
         </div>
 
         <section aria-labelledby="how-title" style={{ marginBottom: 48 }}>
-          <h2 id="how-title" className="h2" style={{ fontSize: 24, marginBottom: 22 }}>How Zola works</h2>
+          <h2 id="how-title" className="h2" style={{ fontSize: 24, marginBottom: 22 }}>{t("How Zola works")}</h2>
           <HowItWorks />
         </section>
 
         <section aria-labelledby="faq-title" style={{ maxWidth: 800 }}>
-          <h2 id="faq-title" className="h2" style={{ fontSize: 24, marginBottom: 16 }}>Common questions</h2>
+          <h2 id="faq-title" className="h2" style={{ fontSize: 24, marginBottom: 16 }}>{t("Common questions")}</h2>
           <div className="card" style={{ overflow: "hidden" }}>
-            {FAQ.map((item) => (
+            {faq.map((item) => (
               <details key={item.q} className="faq">
                 <summary>{item.q}</summary>
                 <div className="faq-body">
@@ -126,8 +213,8 @@ export default async function HelpPage() {
           </div>
           {!session && (
             <p style={{ marginTop: 24, fontSize: 15.5 }}>
-              Ready to begin? <Link href="/auth/register" style={{ fontWeight: 600 }}>Create an account</Link> or{" "}
-              <Link href="/auth/login" style={{ fontWeight: 600 }}>sign in</Link>.
+              {t("Ready to begin?")} <Link href="/auth/register" style={{ fontWeight: 600 }}>{t("Create an account")}</Link> {t("or")}{" "}
+              <Link href="/auth/login" style={{ fontWeight: 600 }}>{t("sign in")}</Link>.
             </p>
           )}
         </section>

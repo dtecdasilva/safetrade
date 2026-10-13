@@ -8,6 +8,8 @@
  */
 
 function getBaseUrl(): string {
+  // Only for automated tests against a stand-in server
+  if (process.env.FAPSHI_BASE_URL) return process.env.FAPSHI_BASE_URL;
   if (process.env.FAPSHI_MODE === "live") return "https://live.fapshi.com";
   if (process.env.FAPSHI_MODE === "sandbox") return "https://sandbox.fapshi.com";
   // Auto-detect from key prefix if FAPSHI_MODE isn't set
@@ -82,9 +84,10 @@ export async function chargeMobileMoney(opts: {
  */
 export async function getPaymentStatus(transId: string) {
   try {
-    const res = await fetch(`${getBaseUrl()}/payment-status/${transId}`, {
+    const res = await fetch(`${getBaseUrl()}/payment-status/${encodeURIComponent(transId)}`, {
       method:  "GET",
       headers: authHeaders(),
+      signal:  AbortSignal.timeout(10000),
     });
     const data = await res.json();
     if (!res.ok) {

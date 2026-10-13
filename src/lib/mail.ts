@@ -92,7 +92,12 @@ export function emailLayout(opts: {
   totalRow?: [string, string];
   cta?: { label: string; url: string };
   note?: string;
+  /** Titled lists of lines, each optionally linked (used by the daily summary). */
+  sections?: { title: string; items: { text: string; url?: string }[]; empty?: string }[];
+  /** Language of the footer. */
+  lang?: "en" | "fr";
 }): string {
+  const fr = opts.lang === "fr";
   const rows = (opts.rows || [])
     .map(
       ([k, v]) =>
@@ -108,11 +113,25 @@ export function emailLayout(opts: {
   const cta = opts.cta
     ? `<p style="margin:24px 0 0;"><a href="${esc(opts.cta.url)}" style="display:inline-block;background:#087F5B;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:15px;padding:13px 22px;border-radius:10px;">${esc(opts.cta.label)}</a></p>`
     : "";
+  const sections = (opts.sections || [])
+    .map((sec) => {
+      const items = sec.items.length
+        ? sec.items
+            .map((it) =>
+              `<li style="margin:0 0 8px;color:#334E68;font-size:14px;line-height:1.5;">${
+                it.url ? `<a href="${esc(it.url)}" style="color:#087F5B;text-decoration:none;font-weight:600;">${esc(it.text)}</a>` : esc(it.text)
+              }</li>`
+            )
+            .join("")
+        : `<li style="margin:0;color:#829AB1;font-size:14px;list-style:none;">${esc(sec.empty || "Nothing")}</li>`;
+      return `<h2 style="margin:24px 0 10px;font-size:15px;color:#102A43;font-weight:700;">${esc(sec.title)}</h2><ul style="margin:0;padding:0 0 0 18px;">${items}</ul>`;
+    })
+    .join("");
   const note = opts.note
     ? `<p style="margin:22px 0 0;padding:12px 14px;background:#E6F7F1;border-radius:10px;color:#05593F;font-size:14px;line-height:1.5;">${esc(opts.note)}</p>`
     : "";
 
-  return `<!doctype html><html><body style="margin:0;padding:0;background:#F8FAFC;">
+  return `<!doctype html><html lang="${fr ? "fr" : "en"}"><body style="margin:0;padding:0;background:#F8FAFC;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F8FAFC;padding:28px 12px;">
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;font-family:'Plus Jakarta Sans',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;">
@@ -120,9 +139,9 @@ export function emailLayout(opts: {
 <tr><td style="background:#FFFFFF;border:1px solid #D9E2EC;border-radius:14px;padding:28px 24px;">
 <h1 style="margin:0 0 10px;font-size:21px;line-height:1.25;color:#102A43;font-weight:700;">${esc(opts.heading)}</h1>
 <p style="margin:0;color:#334E68;font-size:15px;line-height:1.6;">${esc(opts.intro)}</p>
-${table}${cta}${note}
+${table}${sections}${cta}${note}
 </td></tr>
-<tr><td style="padding:18px 4px 0;color:#627D98;font-size:13px;line-height:1.6;">Need help? WhatsApp <a href="${SUPPORT.whatsappUrl}" style="color:#087F5B;font-weight:600;text-decoration:none;">${esc(SUPPORT.whatsapp)}</a> or call <a href="${SUPPORT.phoneUrl}" style="color:#087F5B;font-weight:600;text-decoration:none;">${esc(SUPPORT.phone)}</a>.<br>Zola &mdash; Secure transactions. Simple payments.</td></tr>
+<tr><td style="padding:18px 4px 0;color:#627D98;font-size:13px;line-height:1.6;">${fr ? "Besoin d'aide ? WhatsApp" : "Need help? WhatsApp"} <a href="${SUPPORT.whatsappUrl}" style="color:#087F5B;font-weight:600;text-decoration:none;">${esc(SUPPORT.whatsapp)}</a> ${fr ? "ou appelez le" : "or call"} <a href="${SUPPORT.phoneUrl}" style="color:#087F5B;font-weight:600;text-decoration:none;">${esc(SUPPORT.phone)}</a>.<br>Zola &mdash; ${fr ? "Transactions sécurisées. Paiements simples." : "Secure transactions. Simple payments."}</td></tr>
 </table>
 </td></tr>
 </table>

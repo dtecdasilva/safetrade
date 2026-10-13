@@ -4,9 +4,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, Check } from "lucide-react";
 import AuthShell from "@/components/AuthShell";
+import { useT } from "@/components/I18n";
 
 function ResetForm() {
   const router       = useRouter();
+  const { t } = useT();
   const searchParams = useSearchParams();
   const token        = searchParams.get("token") || "";
 
@@ -44,24 +46,24 @@ function ResetForm() {
     return (
       <>
         <div className="auth-badge"><Check size={24} strokeWidth={2.5} /></div>
-        <h1 className="auth-title">Password updated</h1>
-        <p className="auth-sub">Your password has been changed. Taking you to sign in...</p>
-        <Link href="/auth/login" className="btn btn-secondary btn-block">Go to sign in</Link>
+        <h1 className="auth-title">{t("Password updated")}</h1>
+        <p className="auth-sub">{t("Your password has been changed. Taking you to sign in...")}</p>
+        <Link href="/auth/login" className="btn btn-secondary btn-block">{t("Go to sign in")}</Link>
       </>
     );
   }
 
   return (
     <>
-      <h1 className="auth-title">Set a new password</h1>
-      <p className="auth-sub">Choose a strong password for your Zola account.</p>
+      <h1 className="auth-title">{t("Set a new password")}</h1>
+      <p className="auth-sub">{t("Choose a strong password for your Zola account.")}</p>
 
       {error && (
         <div className="notice notice-danger" role="alert" style={{ marginBottom: 16 }}>
           <span>
-            {error}
+            {t(error)}
             {error.includes("expired") || error.includes("Invalid") ? (
-              <> <Link href="/auth/forgot-password">Request a new link</Link></>
+              <> <Link href="/auth/forgot-password">{t("Request a new link")}</Link></>
             ) : null}
           </span>
         </div>
@@ -69,34 +71,34 @@ function ResetForm() {
 
       <form onSubmit={handleSubmit} className="auth-form">
         <div className="field">
-          <label className="label" htmlFor="password">New password</label>
+          <label className="label" htmlFor="password">{t("New password")}</label>
           <div className="input-wrap">
-            <input id="password" className="input" type={showPw ? "text" : "password"} placeholder="At least 8 characters"
+            <input id="password" className="input" type={showPw ? "text" : "password"} placeholder={t("At least 8 characters")}
               autoComplete="new-password"
               value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
             <button type="button" className="input-affix" onClick={() => setShowPw(s => !s)}
-              aria-label={showPw ? "Hide password" : "Show password"}>
+              aria-label={showPw ? t("Hide password") : t("Show password")}>
               {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
           </div>
         </div>
 
         <div className="field">
-          <label className="label" htmlFor="confirm">Confirm password</label>
+          <label className="label" htmlFor="confirm">{t("Confirm password")}</label>
           <div className="input-wrap">
             <input id="confirm" className={`input${mismatch ? " is-invalid" : ""}`}
-              type={showPw2 ? "text" : "password"} placeholder="Repeat password" autoComplete="new-password"
+              type={showPw2 ? "text" : "password"} placeholder={t("Repeat password")} autoComplete="new-password"
               value={confirm} onChange={e => setConfirm(e.target.value)} required />
             <button type="button" className="input-affix" onClick={() => setShowPw2(s => !s)}
-              aria-label={showPw2 ? "Hide password" : "Show password"}>
+              aria-label={showPw2 ? t("Hide password") : t("Show password")}>
               {showPw2 ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
           </div>
-          {mismatch && <p className="hint-error">Passwords do not match</p>}
+          {mismatch && <p className="hint-error">{t("Passwords do not match")}</p>}
         </div>
 
         <button type="submit" disabled={loading || blocked} className="btn btn-primary btn-block" style={{ marginTop: 4 }}>
-          {loading ? "Updating..." : "Update password"}
+          {loading ? t("Updating...") : t("Update password")}
         </button>
       </form>
     </>

@@ -6,8 +6,11 @@ import { getDb, initDb } from "@/lib/db";
 import { getRecentActivity } from "@/lib/activity";
 import Navbar from "@/components/Navbar";
 import { Timeline } from "@/components/ui";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Activity" };
+export function generateMetadata(): Metadata {
+  return { title: getT().t("Activity") };
+}
 
 export default async function ActivityPage() {
   const session = await getSession();
@@ -22,13 +25,14 @@ export default async function ActivityPage() {
   const trades = snap.docs.map(d => d.data() as any);
   const activity = await getRecentActivity(trades, 50);
 
+  const { t } = getT();
   return (
     <div className="page">
       <Navbar user={{ name: session.name, role: session.role }} />
       <main className="container main" style={{ maxWidth: 720 }}>
         <div style={{ marginBottom: 24 }}>
-          <h1 className="page-title">Activity</h1>
-          <p className="page-sub">A record of everything that has happened on your transactions.</p>
+          <h1 className="page-title">{t("Activity")}</h1>
+          <p className="page-sub">{t("A record of everything that has happened on your transactions.")}</p>
         </div>
 
         {activity.length > 0 ? (
@@ -46,8 +50,8 @@ export default async function ActivityPage() {
           </div>
         ) : (
           <div className="card empty">
-            <p className="empty-title">No activity yet</p>
-            <p className="empty-text">Payments, deliveries and confirmations will be recorded here as they happen.</p>
+            <p className="empty-title">{t("No activity yet")}</p>
+            <p className="empty-text">{t("Payments, deliveries and confirmations will be recorded here as they happen.")}</p>
           </div>
         )}
       </main>

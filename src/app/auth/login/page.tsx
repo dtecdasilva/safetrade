@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import AuthShell from "@/components/AuthShell";
 import GoogleButton from "@/components/GoogleButton";
+import { useT } from "@/components/I18n";
 
 const GOOGLE_ERRORS: Record<string, string> = {
   google_not_configured: "Google sign-in isn't set up yet. Sign in with your email and password.",
@@ -16,6 +17,7 @@ const GOOGLE_ERRORS: Record<string, string> = {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useT();
   const [form, setForm]       = useState({ email: "", password: "" });
   const [showPw, setShowPw]   = useState(false);
   const [error, setError]     = useState("");
@@ -24,8 +26,8 @@ export default function LoginPage() {
   // Show why a Google sign-in didn't complete, if we were sent back with a reason
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("error");
-    if (code && GOOGLE_ERRORS[code]) setError(GOOGLE_ERRORS[code]);
-  }, []);
+    if (code && GOOGLE_ERRORS[code]) setError(t(GOOGLE_ERRORS[code]));
+  }, [t]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,55 +35,55 @@ export default function LoginPage() {
     try {
       const res  = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
+      if (!res.ok) { setError(t(data.error)); return; }
       router.push(data.user.role === "admin" ? "/admin" : "/dashboard");
       router.refresh();
-    } catch { setError("Something went wrong. Check your connection and try again."); }
+    } catch { setError(t("Something went wrong. Check your connection and try again.")); }
     finally { setLoading(false); }
   }
 
   return (
     <AuthShell>
-      <h1 className="auth-title">Sign in</h1>
-      <p className="auth-sub">Welcome back to Zola.</p>
+      <h1 className="auth-title">{t("Sign in")}</h1>
+      <p className="auth-sub">{t("Welcome back to Zola.")}</p>
 
       {error && <div className="notice notice-danger" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
       <form onSubmit={handleSubmit} className="auth-form">
         <div className="field">
-          <label className="label" htmlFor="email">Email</label>
-          <input id="email" className="input" type="email" placeholder="you@example.com" autoComplete="email"
+          <label className="label" htmlFor="email">{t("Email")}</label>
+          <input id="email" className="input" type="email" placeholder={t("you@example.com")} autoComplete="email"
             value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
         </div>
 
         <div className="field">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-            <label className="label" htmlFor="password">Password</label>
-            <Link href="/auth/forgot-password" style={{ fontSize: 13.5, fontWeight: 600 }}>Forgot password?</Link>
+            <label className="label" htmlFor="password">{t("Password")}</label>
+            <Link href="/auth/forgot-password" style={{ fontSize: 13.5, fontWeight: 600 }}>{t("Forgot password?")}</Link>
           </div>
           <div className="input-wrap">
             <input id="password" className="input"
               type={showPw ? "text" : "password"}
-              placeholder="Your password" autoComplete="current-password"
+              placeholder={t("Your password")} autoComplete="current-password"
               value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
             <button type="button" className="input-affix" onClick={() => setShowPw(s => !s)}
-              aria-label={showPw ? "Hide password" : "Show password"}>
+              aria-label={showPw ? t("Hide password") : t("Show password")}>
               {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
           </div>
         </div>
 
         <button type="submit" disabled={loading} className="btn btn-primary btn-block" style={{ marginTop: 4 }}>
-          {loading ? "Signing in..." : "Sign in"}
+          {loading ? t("Signing in...") : t("Sign in")}
         </button>
       </form>
 
-      <div className="or-rule">or</div>
+      <div className="or-rule">{t("or")}</div>
       <GoogleButton />
 
       <p className="auth-foot">
-        New to Zola? <Link href="/auth/register">Create an account</Link>
+        {t("New to Zola?")} <Link href="/auth/register">{t("Create an account")}</Link>
       </p>
     </AuthShell>
   );

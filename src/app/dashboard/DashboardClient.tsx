@@ -8,10 +8,12 @@ import { ZolaMark } from "@/components/Logo";
 import { PhoneField, Pill, Timeline } from "@/components/ui";
 import { WITHDRAWAL_STATUS, fmtDate, money } from "@/lib/zola";
 import type { ActivityItem } from "@/lib/activity";
+import { useT } from "@/components/I18n";
 
 const NETWORKS = ["MTN Mobile Money", "Orange Money"];
 
 export default function DashboardClient({ session, trades, activity = [] }: { session: any; trades: any[]; activity?: ActivityItem[] }) {
+  const { t: tr, lang } = useT();
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [showW, setShowW]             = useState(false);
   const [wForm, setWForm]             = useState({ amount: "", phone: "", network: NETWORKS[0] });
@@ -41,20 +43,22 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
   // What this person needs to do next
   const todos = isVendor
     ? active.filter(t => t.status === "funds_held").map(t => ({
-        id: t.id, icon: <Truck size={17} />, cta: "Open",
-        title: `Deliver “${t.title}”`,
-        text: "Payment has been secured. Complete the delivery to receive your funds.",
+        id: t.id, icon: <Truck size={17} />, cta: tr("Open"),
+        title: tr("Deliver “{title}”", { title: t.title }),
+        text: t.needs_delivery === false
+          ? tr("Payment has been secured. Complete the work to receive your funds.")
+          : tr("Payment has been secured. Send the item to Zola to receive your funds."),
       }))
     : [
         ...unpaid.map(t => ({
-          id: t.id, icon: <Banknote size={17} />, cta: "Pay securely",
-          title: `Pay for “${t.title}”`,
-          text: `${money(t.buyer_total || t.amount)} to pay. Zola holds it until your order arrives.`,
+          id: t.id, icon: <Banknote size={17} />, cta: tr("Pay securely"),
+          title: tr("Pay for “{title}”", { title: t.title }),
+          text: tr("{amount} to pay. Zola holds it until your order arrives.", { amount: money(t.buyer_total || t.amount) }),
         })),
         ...active.filter(t => t.status === "shipped").map(t => ({
-          id: t.id, icon: <PackageCheck size={17} />, cta: "Review",
-          title: `Confirm delivery of “${t.title}”`,
-          text: "Confirm once your order has arrived so the seller can be paid.",
+          id: t.id, icon: <PackageCheck size={17} />, cta: tr("Review"),
+          title: tr("Confirm delivery of “{title}”", { title: t.title }),
+          text: tr("Confirm once your order has arrived so the seller can be paid."),
         })),
       ];
 
@@ -71,7 +75,7 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
   }
 
   const canW = !wLoading && !hasPendingW && !!wForm.amount && !!wForm.phone && Number(wForm.amount) >= 1 && wForm.phone.length >= 8;
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 
   return (
     <div className="page">
@@ -82,18 +86,18 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
         {/* Header */}
         <div className="dash-head">
           <div>
-            <h1 className="page-title">Hello, {session.name.split(" ")[0]}</h1>
+            <h1 className="page-title">{tr("Hello, {name}", { name: session.name.split(" ")[0] })}</h1>
             <p className="page-sub">
-              {isVendor ? "Here's where your sales and payments stand." : "Here's where your purchases and payments stand."}
+              {isVendor ? tr("Here's where your sales and payments stand.") : tr("Here's where your purchases and payments stand.")}
             </p>
           </div>
           {isVendor && (
             <div className="dash-actions">
               <Link href="/trade/new" className="btn btn-primary">
-                <Plus size={17} /> New transaction
+                <Plus size={17} /> {tr("New transaction")}
               </Link>
               <button onClick={() => { setShowW(o => !o); setWError(""); }} className="btn btn-secondary" aria-expanded={showW}>
-                <Banknote size={17} /> Withdraw
+                <Banknote size={17} /> {tr("Withdraw")}
               </button>
             </div>
           )}
@@ -102,34 +106,34 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
         {/* Success message */}
         {wSuccess && (
           <div className="notice notice-ok fade-up" role="status" style={{ marginBottom: 16 }}>
-            <CheckCircle size={16} /> Withdrawal requested. Zola will send it to your mobile money number.
+            <CheckCircle size={16} /> {tr("Withdrawal requested. Zola will send it to your mobile money number.")}
           </div>
         )}
 
         {/* Withdraw form */}
         {isVendor && showW && (
           <div className="card card-pad fade-up" style={{ marginBottom: 24, maxWidth: 640 }}>
-            <h2 className="section-title">Withdraw funds</h2>
-            <p className="hint" style={{ margin: "2px 0 16px" }}>Zola sends the amount to your mobile money number.</p>
+            <h2 className="section-title">{tr("Withdraw funds")}</h2>
+            <p className="hint" style={{ margin: "2px 0 16px" }}>{tr("Zola sends the amount to your mobile money number.")}</p>
 
-            {wError && <div className="notice notice-danger" role="alert" style={{ marginBottom: 12 }}>{wError}</div>}
-            {hasPendingW && <div className="notice notice-wait" style={{ marginBottom: 12 }}><Clock size={16} /> You already have a withdrawal in progress.</div>}
+            {wError && <div className="notice notice-danger" role="alert" style={{ marginBottom: 12 }}>{tr(wError)}</div>}
+            {hasPendingW && <div className="notice notice-wait" style={{ marginBottom: 12 }}><Clock size={16} /> {tr("You already have a withdrawal in progress.")}</div>}
 
             <div className="form-grid-2" style={{ marginBottom: 14 }}>
               <div className="field">
-                <label className="label" htmlFor="w-amount">Amount (FCFA)</label>
+                <label className="label" htmlFor="w-amount">{tr("Amount (FCFA)")}</label>
                 <input id="w-amount" className="input num" type="number" min="1" placeholder="0" inputMode="numeric" value={wForm.amount} disabled={hasPendingW}
                   onChange={e => setWForm(f => ({ ...f, amount: e.target.value }))} />
               </div>
               <div className="field">
-                <label className="label" htmlFor="w-phone">Mobile money number</label>
+                <label className="label" htmlFor="w-phone">{tr("Mobile money number")}</label>
                 <PhoneField id="w-phone" value={wForm.phone} disabled={hasPendingW}
                   onChange={v => setWForm(f => ({ ...f, phone: v }))} />
               </div>
             </div>
 
             <div className="field" style={{ marginBottom: 18 }}>
-              <span className="label">Network</span>
+              <span className="label">{tr("Network")}</span>
               <div className="choice-row">
                 {NETWORKS.map(n => (
                   <button key={n} type="button" className="choice" aria-pressed={wForm.network === n} disabled={hasPendingW}
@@ -142,9 +146,9 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
 
             <div className="btn-row">
               <button onClick={submitW} disabled={!canW} className="btn btn-primary" style={{ flex: 1 }}>
-                {wLoading ? "Sending..." : "Request withdrawal"}
+                {wLoading ? tr("Sending...") : tr("Request withdrawal")}
               </button>
-              <button onClick={() => setShowW(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={() => setShowW(false)} className="btn btn-secondary">{tr("Cancel")}</button>
             </div>
           </div>
         )}
@@ -152,49 +156,53 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
         {/* Money and counts */}
         <div className="stats">
           <div className="stat stat-lead">
-            <p className="stat-label"><ZolaMark size={18} color="currentColor" /> Held by Zola</p>
+            <p className="stat-label"><ZolaMark size={18} color="currentColor" /> {tr("Held by Zola")}</p>
             <p className="stat-value">{money(escrow)}</p>
             <p className="stat-note">
               {held.length === 0
-                ? "Nothing is being held right now."
+                ? tr("Nothing is being held right now.")
                 : isVendor
-                  ? `Secured for ${plural(held.length, "order")}. Released to you after delivery is confirmed and reviewed.`
-                  : `Protected across ${plural(held.length, "transaction")} until you confirm delivery.`}
+                  ? (held.length === 1
+                      ? tr("Secured for 1 order. Released to you after delivery is confirmed and reviewed.")
+                      : tr("Secured for {n} orders. Released to you after delivery is confirmed and reviewed.", { n: held.length }))
+                  : (held.length === 1
+                      ? tr("Protected across 1 transaction until you confirm delivery.")
+                      : tr("Protected across {n} transactions until you confirm delivery.", { n: held.length }))}
             </p>
           </div>
 
           {isVendor ? (
             <div className="stat">
-              <p className="stat-label">Money received</p>
+              <p className="stat-label">{tr("Money received")}</p>
               <p className="stat-value">{money(released)}</p>
-              <p className="stat-note">From completed transactions</p>
+              <p className="stat-note">{tr("From completed transactions")}</p>
             </div>
           ) : (
             <div className="stat">
-              <p className="stat-label">Pending payments</p>
+              <p className="stat-label">{tr("Pending payments")}</p>
               <p className="stat-value">{unpaid.length}</p>
-              <p className="stat-note">{unpaid.length ? `${money(unpaidTotal)} to pay` : "Nothing to pay"}</p>
+              <p className="stat-note">{unpaid.length ? tr("{amount} to pay", { amount: money(unpaidTotal) }) : tr("Nothing to pay")}</p>
             </div>
           )}
 
           {isVendor ? (
             <div className="stat">
-              <p className="stat-label">Pending payments</p>
+              <p className="stat-label">{tr("Pending payments")}</p>
               <p className="stat-value">{unpaid.length}</p>
-              <p className="stat-note">{unpaid.length ? "Waiting for buyers to pay" : "No one owes a payment"}</p>
+              <p className="stat-note">{unpaid.length ? tr("Waiting for buyers to pay") : tr("No one owes a payment")}</p>
             </div>
           ) : (
             <div className="stat">
-              <p className="stat-label">Active</p>
+              <p className="stat-label">{tr("Active")}</p>
               <p className="stat-value">{active.length}</p>
-              <p className="stat-note">Transactions in progress</p>
+              <p className="stat-note">{tr("Transactions in progress")}</p>
             </div>
           )}
 
           <div className="stat">
-            <p className="stat-label">Completed</p>
+            <p className="stat-label">{tr("Completed")}</p>
             <p className="stat-value">{completed.length}</p>
-            <p className="stat-note">Delivered and paid out</p>
+            <p className="stat-note">{tr("Delivered and paid out")}</p>
           </div>
         </div>
 
@@ -203,10 +211,10 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
           <div className="notice notice-ok" style={{ marginBottom: 24 }}>
             <Clock size={16} />
             <span>
-              {plural(pending, "transaction")} under review.{" "}
+              {pending === 1 ? tr("1 transaction under review.") : tr("{n} transactions under review.", { n: pending })}{" "}
               {isVendor
-                ? "Zola releases your payment 24 hours after delivery is confirmed, if no problem is reported."
-                : "You have 24 hours after confirming to tell us if anything is wrong. Then the seller is paid."}
+                ? tr("Zola releases your payment 24 hours after delivery is confirmed, if no problem is reported.")
+                : tr("You have 24 hours after confirming to tell us if anything is wrong. Then the seller is paid.")}
             </span>
           </div>
         )}
@@ -218,7 +226,7 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
             {todos.length > 0 && (
               <section aria-labelledby="todo-title">
                 <div className="block-head">
-                  <h2 id="todo-title" className="section-title">Waiting on you</h2>
+                  <h2 id="todo-title" className="section-title">{tr("Waiting on you")}</h2>
                   <Pill tone="wait">{todos.length}</Pill>
                 </div>
                 <div className="card card-wait" style={{ background: "var(--gold-tint)", overflow: "hidden" }}>
@@ -239,8 +247,8 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
             {/* Active transactions */}
             <section id="transactions" aria-labelledby="active-title">
               <div className="block-head">
-                <h2 id="active-title" className="section-title">Active transactions{active.length > 0 ? ` (${active.length})` : ""}</h2>
-                {trades.length > 0 && <Link href="/transactions" className="block-link">View all</Link>}
+                <h2 id="active-title" className="section-title">{tr("Active transactions")}{active.length > 0 ? ` (${active.length})` : ""}</h2>
+                {trades.length > 0 && <Link href="/transactions" className="block-link">{tr("View all")}</Link>}
               </div>
               {active.length > 0 ? (
                 <div className="card tx-list">
@@ -248,15 +256,15 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
                 </div>
               ) : (
                 <div className="card empty">
-                  <p className="empty-title">{trades.length === 0 ? "No transactions yet" : "No active transactions"}</p>
+                  <p className="empty-title">{trades.length === 0 ? tr("No transactions yet") : tr("No active transactions")}</p>
                   <p className="empty-text">
                     {isVendor
-                      ? "Create a transaction and Zola will notify the buyer to pay."
-                      : "When a seller creates a transaction for your number, it will appear here."}
+                      ? tr("Create a transaction and Zola will notify the buyer to pay.")
+                      : tr("When a seller creates a transaction for your number, it will appear here.")}
                   </p>
                   {isVendor && (
                     <Link href="/trade/new" className="btn btn-primary" style={{ marginTop: 18 }}>
-                      <Plus size={17} /> New transaction
+                      <Plus size={17} /> {tr("New transaction")}
                     </Link>
                   )}
                 </div>
@@ -267,8 +275,8 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
             {completed.length > 0 && (
               <section aria-labelledby="done-title">
                 <div className="block-head">
-                  <h2 id="done-title" className="section-title">Completed</h2>
-                  {completed.length > 3 && <Link href="/transactions" className="block-link">View all {completed.length}</Link>}
+                  <h2 id="done-title" className="section-title">{tr("Completed")}</h2>
+                  {completed.length > 3 && <Link href="/transactions" className="block-link">{tr("View all {n}", { n: completed.length })}</Link>}
                 </div>
                 <div className="card tx-list">
                   {completed.slice(0, 3).map(t => <TxRow key={t.id} trade={t} role={session.role} />)}
@@ -282,8 +290,8 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
             {/* Recent activity */}
             <section id="activity" aria-labelledby="activity-title">
               <div className="block-head">
-                <h2 id="activity-title" className="section-title">Recent activity</h2>
-                {activity.length > 0 && <Link href="/activity" className="block-link">View all</Link>}
+                <h2 id="activity-title" className="section-title">{tr("Recent activity")}</h2>
+                {activity.length > 0 && <Link href="/activity" className="block-link">{tr("View all")}</Link>}
               </div>
               <div className="card card-pad">
                 {activity.length > 0 ? (
@@ -296,18 +304,18 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
                     }))}
                   />
                 ) : (
-                  <p className="hint">Payments, deliveries and confirmations will show up here as they happen.</p>
+                  <p className="hint">{tr("Payments, deliveries and confirmations will show up here as they happen.")}</p>
                 )}
               </div>
             </section>
 
             {/* Withdrawal history */}
             {isVendor && withdrawals.length > 0 && (
-              <section aria-label="Withdrawals">
+              <section aria-label={tr("Withdrawals")}>
                 <div className="card" style={{ overflow: "hidden" }}>
                   <button onClick={() => setWHistory(o => !o)} aria-expanded={wHistory}
                     style={{ width: "100%", minHeight: 52, padding: "0 18px", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: "inherit" }}>
-                    <span className="section-title" style={{ fontSize: 15 }}>Withdrawals ({withdrawals.length})</span>
+                    <span className="section-title" style={{ fontSize: 15 }}>{tr("Withdrawals")} ({withdrawals.length})</span>
                     {wHistory ? <ChevronUp size={17} color="var(--ink-3)" /> : <ChevronDown size={17} color="var(--ink-3)" />}
                   </button>
                   {wHistory && (
@@ -318,9 +326,9 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
                           <div key={w.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--line-soft)", flexWrap: "wrap", gap: 8 }}>
                             <div>
                               <p className="num" style={{ fontSize: 14.5, fontWeight: 700, color: "var(--navy)" }}>{money(w.amount)}</p>
-                              <p className="hint num" suppressHydrationWarning>{w.network}, +237{w.phone}, {fmtDate(w.created_at)}</p>
+                              <p className="hint num" suppressHydrationWarning>{w.network}, +237{w.phone}, {fmtDate(w.created_at, lang)}</p>
                             </div>
-                            <Pill tone={ws.tone}>{ws.label}</Pill>
+                            <Pill tone={ws.tone}>{tr(ws.label)}</Pill>
                           </div>
                         );
                       })}

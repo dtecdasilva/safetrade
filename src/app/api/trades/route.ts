@@ -7,6 +7,7 @@ import { notifyTradeMove } from "@/lib/notifications";
 import { quote, feePercentLabel, DELIVERY_NOTE } from "@/lib/fees";
 import { cleanPhone as normalizePhone, cleanEmail, isEmail } from "@/lib/users";
 import { INVITED_BUYER_NAME, invitedBuyerId, inviteSummary, sendBuyerInvite } from "@/lib/invites";
+import { siteUrl } from "@/lib/support";
 import {
   notifyBuyerTradeCreated,
   notifyAdminTradeCreated,
@@ -161,7 +162,7 @@ export async function POST(req: NextRequest) {
       type:   "info", created_at: now,
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://safetrade-ruddy.vercel.app";
+    const appUrl = siteUrl();
 
     const tradeForNotice = {
       id, title, amount: Number(amount), fee, buyer_total: buyerTotal,
@@ -180,7 +181,8 @@ export async function POST(req: NextRequest) {
         title, amount: buyerTotal, tradeId: id,
       }).catch(console.error);
 
-      const result  = await sendBuyerInvite(tradeForNotice);
+      // The buyer has no account yet, so the invitation is written in the seller's language
+      const result  = await sendBuyerInvite(tradeForNotice, vendor.lang === "fr" ? "fr" : "en");
       const summary = inviteSummary(tradeForNotice, result);
       // Remember which messages actually went out, so the seller is told the truth
       await db.collection("trades").doc(id).update({ buyer_invite_sent: { email: result.email, whatsapp: result.whatsapp } });
@@ -208,22 +210,43 @@ export async function POST(req: NextRequest) {
       title, amount: buyerTotal, tradeId: id,
     }).catch(console.error);
 
-    // Email fallback
-    const emailResult = await sendEmail({
+    // Email, in the buyer's language
+    const rate = feePercentLabel(Number(amount));
+    const fmt = (n: number) => `FCFA ${Number(n).toLocaleString("en-US")}`;
+    const payUrl = `${appUrl}/trade/${id}`;
+    const emailResult = await sendEmail(buyer.lang === "fr" ? {
+      to: buyer.email,
+      subject: `Zola : ${session.name} a créé une transaction pour vous`,
+      text: `Bonjour ${buyer.name},\n\n${session.name} a créé une transaction pour vous sur Zola.\n\nArticle : ${title}\nPrix de l'article : ${fmt(Number(amount))}\nFrais Zola (${rate}) : ${fmt(fee)}${deliveryFee > 0 ? `\nLivraison : ${fmt(deliveryFee)}` : ""}\nTotal à payer : ${fmt(buyerTotal)}\n\nVérifier et payer en sécurité : ${payUrl}\n\nVous payez Zola, pas le vendeur. Nous gardons votre paiement jusqu'à votre confirmation de livraison.\n\nZola\nTransactions sécurisées. Paiements simples.`,
+      html: emailLayout({
+        lang: "fr",
+        heading: `${session.name} a créé une transaction pour vous`,
+        intro: `Bonjour ${buyer.name}, vérifiez les détails ci-dessous et payez en sécurité quand vous êtes prêt.`,
+        rows: [
+          ["Article", title],
+          ["Prix de l'article", fmt(Number(amount))],
+          [`Frais Zola (${rate})`, fmt(fee)],
+          ...(deliveryFee > 0 ? [["Livraison", fmt(deliveryFee)] as [string, string]] : []),
+        ],
+        totalRow: ["Total à payer", fmt(buyerTotal)],
+        cta: { label: "Vérifier et payer en sécurité", url: payUrl },
+        note: `Vous payez Zola, pas le vendeur. Nous gardons votre paiement jusqu'à votre confirmation de livraison.${deliveryFee > 0 ? " La livraison standard coûte FCFA 1,000. Si la livraison de votre article coûte plus cher, vous paierez la différence." : ""}`,
+      }),
+    } : {
       to: buyer.email,
       subject: `Zola: ${session.name} created a transaction for you`,
-      text: `Hi ${buyer.name},\n\n${session.name} created a transaction for you on Zola.\n\nItem: ${title}\nItem price: FCFA ${Number(amount).toLocaleString()}\nZola fee (${feePercentLabel(Number(amount))}): FCFA ${fee.toLocaleString()}${deliveryFee > 0 ? `\nDelivery: FCFA ${deliveryFee.toLocaleString()}` : ""}\nTotal to pay: FCFA ${buyerTotal.toLocaleString()}\n\nReview and pay securely: ${appUrl}/trade/${id}\n\nYou pay Zola, not the seller. We hold your payment until you confirm delivery.\n\nZola\nSecure transactions. Simple payments.`,
+      text: `Hi ${buyer.name},\n\n${session.name} created a transaction for you on Zola.\n\nItem: ${title}\nItem price: ${fmt(Number(amount))}\nZola fee (${rate}): ${fmt(fee)}${deliveryFee > 0 ? `\nDelivery: ${fmt(deliveryFee)}` : ""}\nTotal to pay: ${fmt(buyerTotal)}\n\nReview and pay securely: ${payUrl}\n\nYou pay Zola, not the seller. We hold your payment until you confirm delivery.\n\nZola\nSecure transactions. Simple payments.`,
       html: emailLayout({
         heading: `${session.name} created a transaction for you`,
         intro: `Hi ${buyer.name}, review the details below and pay securely when you're ready.`,
         rows: [
           ["Item", title],
-          ["Item price", `FCFA ${Number(amount).toLocaleString()}`],
-          [`Zola fee (${feePercentLabel(Number(amount))})`, `FCFA ${fee.toLocaleString()}`],
-          ...(deliveryFee > 0 ? [["Delivery", `FCFA ${deliveryFee.toLocaleString()}`] as [string, string]] : []),
+          ["Item price", fmt(Number(amount))],
+          [`Zola fee (${rate})`, fmt(fee)],
+          ...(deliveryFee > 0 ? [["Delivery", fmt(deliveryFee)] as [string, string]] : []),
         ],
-        totalRow: ["Total to pay", `FCFA ${buyerTotal.toLocaleString()}`],
-        cta: { label: "Review and pay securely", url: `${appUrl}/trade/${id}` },
+        totalRow: ["Total to pay", fmt(buyerTotal)],
+        cta: { label: "Review and pay securely", url: payUrl },
         note: `You pay Zola, not the seller. We hold your payment until you confirm delivery.${deliveryFee > 0 ? ` ${DELIVERY_NOTE}` : ""}`,
       }),
     });

@@ -26,7 +26,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ref:         params.id,
       amount:      w.amount,
       phone,
-      network:     w.network === "orange" ? "orange" : "mtn",
+      // Stored as "Orange Money" or "MTN Mobile Money" (older requests may say "orange" / "mtn")
+      network:     /orange/i.test(String(w.network)) ? "orange" : "mtn",
       description: `Zola withdrawal for ${w.vendor_name}`,
     });
 

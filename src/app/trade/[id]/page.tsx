@@ -11,6 +11,7 @@ import { ContactRow, SupportButtons, SupportLine } from "@/components/Support";
 import { handoverHow } from "@/lib/handover";
 import { prettyPhone } from "@/lib/support";
 import { quote, feePercentOf, feePercentLabel, DELIVERY_NOTE } from "@/lib/fees";
+import { useT, rich } from "@/components/I18n";
 
 const NETWORKS = [
   { id: "mtn",    label: "MTN MoMo" },
@@ -41,6 +42,7 @@ const PAYOUT_STATUS: Record<string, string> = {
 
 export default function TradePage() {
   const router = useRouter();
+  const { t, lang } = useT();
   const { id } = useParams() as { id: string };
 
   const [user, setUser]   = useState<any>(null);
@@ -53,6 +55,9 @@ export default function TradePage() {
   const [phone, setPhone]     = useState("");
   const [network, setNetwork] = useState<"mtn"|"orange"|"">("");
   const [paymentSent, setPaymentSent] = useState(false);
+  const [waitedOut, setWaitedOut]     = useState(false);
+  const [checking, setChecking]       = useState(false);
+  const [checkMsg, setCheckMsg]       = useState("");
 
   // Notify
   const [notified, setNotified] = useState(false);
@@ -132,6 +137,22 @@ export default function TradePage() {
     finally { setActing(false); }
   }
 
+  // Ask Fapshi directly whether the payment went through (if its confirmation never reached Zola)
+  async function checkPayment(quiet = false) {
+    if (!quiet) { setChecking(true); setCheckMsg(""); }
+    try {
+      const res  = await fetch(`/api/trades/${id}/check-payment`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (data.result === "paid" || data.result === "already_paid") { setPaymentSent(false); await load(); }
+      if (!quiet) setCheckMsg(res.ok ? data.message : data.error || "Something went wrong. Please try again.");
+      return data.result as string | undefined;
+    } catch {
+      if (!quiet) setCheckMsg("Something went wrong. Check your connection and try again.");
+    } finally {
+      if (!quiet) setChecking(false);
+    }
+  }
+
   async function pay() {
     if (!phone.trim()) { setError("Enter your mobile money number"); return; }
     if (!network)      { setError("Choose a network"); return; }
@@ -148,19 +169,23 @@ export default function TradePage() {
       // Fapshi sends a mobile money push — no redirect needed
       // Show waiting state and poll for status
       setPaymentSent(true);
+      setWaitedOut(false);
+      setCheckMsg("");
       setActing(false);
 
       // Poll trade status every 5 seconds for up to 3 minutes
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts++;
+        // Every 15 seconds, also ask Fapshi directly in case its confirmation is slow to arrive
+        if (attempts % 3 === 0) await checkPayment(true);
         const r = await fetch(`/api/trades/${id}`);
         const d = await r.json();
         if (d.trade?.status !== "pending_payment") {
           clearInterval(poll);
           await load();
         }
-        if (attempts >= 36) clearInterval(poll); // stop after 3 mins
+        if (attempts >= 36) { clearInterval(poll); setWaitedOut(true); } // stop after 3 mins
       }, 5000);
     } catch { setError("Something went wrong. Check your connection and try again."); setActing(false); }
   }
@@ -179,7 +204,7 @@ export default function TradePage() {
   async function copyInvite() {
     const link = `${window.location.origin}/auth/register?invite=${id}`;
     try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2500); }
-    catch { window.prompt("Copy this link and send it to the buyer", link); }
+    catch { window.prompt(t("Copy this link and send it to the buyer"), link); }
   }
 
   async function saveEdit() {
@@ -220,9 +245,9 @@ export default function TradePage() {
   const hasDelivery = deliveryFee > 0;
 
   const viewer: ViewerRole = isBuyer ? "buyer" : isVendor ? "seller" : "admin";
-  const story   = statusStory(trade, viewer, now);
+  const story   = statusStory(trade, viewer, now, t, lang);
   const review  = reviewState(trade, now);
-  const reviewUntil = review.endsAt ? fmtDateTime(review.endsAt) : "";
+  const reviewUntil = review.endsAt ? fmtDateTime(review.endsAt, lang) : "";
   const complaintLen = complaint.trim().length;
   const total   = Number(trade.buyer_total || trade.amount);
   const hasPaid = !["pending_payment", "cancelled"].includes(trade.status);
@@ -234,24 +259,24 @@ export default function TradePage() {
   if (isBuyer && trade.status === "pending_payment") {
     action = !paymentSent ? (
       <section className="card card-pad tx-action" aria-labelledby="pay-title">
-        <h2 id="pay-title" className="section-title">Pay securely</h2>
+        <h2 id="pay-title" className="section-title">{t("Pay securely")}</h2>
         <p className="hint" style={{ margin: "2px 0 18px" }}>
-          You pay Zola, not the seller. We hold your payment until you confirm delivery.
+          {t("You pay Zola, not the seller. We hold your payment until you confirm delivery.")}
         </p>
 
         <div style={{ padding: "8px 14px 12px", background: "var(--bg)", borderRadius: "var(--r-md)", marginBottom: deliveryFee > 0 ? 8 : 18 }}>
-          <div className="kv"><span>Item price</span><span>{money(trade.amount)}</span></div>
-          <div className="kv"><span>Zola fee ({feePercentOf(trade)})</span><span>{money(trade.fee)}</span></div>
-          {deliveryFee > 0 && <div className="kv"><span>Delivery</span><span>{money(deliveryFee)}</span></div>}
+          <div className="kv"><span>{t("Item price")}</span><span>{money(trade.amount)}</span></div>
+          <div className="kv"><span>{t("Zola fee ({rate})", { rate: feePercentOf(trade) })}</span><span>{money(trade.fee)}</span></div>
+          {deliveryFee > 0 && <div className="kv"><span>{t("Delivery")}</span><span>{money(deliveryFee)}</span></div>}
           <div className="kv kv-total">
-            <span>Total to pay</span>
+            <span>{t("Total to pay")}</span>
             <span style={{ fontSize: 18, fontWeight: 800 }}>{money(total)}</span>
           </div>
         </div>
-        {deliveryFee > 0 && <p className="hint" style={{ marginBottom: 18 }}>{DELIVERY_NOTE}</p>}
+        {deliveryFee > 0 && <p className="hint" style={{ marginBottom: 18 }}>{t(DELIVERY_NOTE)}</p>}
 
         <div className="field" style={{ marginBottom: 14 }}>
-          <span className="label">Network</span>
+          <span className="label">{t("Network")}</span>
           <div className="choice-row">
             {NETWORKS.map(n => (
               <button key={n.id} type="button" className="choice" aria-pressed={network === n.id}
@@ -264,51 +289,73 @@ export default function TradePage() {
 
         <div className="field" style={{ marginBottom: 18 }}>
           <label className="label" htmlFor="pay-phone">
-            {network ? (network === "mtn" ? "MTN" : "Orange") : "Mobile money"} number
+            {network === "mtn" ? t("MTN number") : network === "orange" ? t("Orange number") : t("Mobile money number")}
           </label>
           <PhoneField id="pay-phone" value={phone} onChange={setPhone} />
         </div>
 
         <button onClick={pay} disabled={!canPay || acting} className="btn btn-primary btn-lg btn-block" style={{ whiteSpace: "normal", lineHeight: 1.25, padding: "10px 16px" }}>
           {acting
-            ? <><span className="spinner spinner-sm spinner-on-color" /> Sending prompt to your phone...</>
-            : <><ShieldCheck size={18} style={{ flexShrink: 0 }} /> {!network ? "Choose a network to pay" : `Pay ${money(total)} with ${selNet?.label}`}</>
+            ? <><span className="spinner spinner-sm spinner-on-color" /> {t("Sending prompt to your phone...")}</>
+            : <><ShieldCheck size={18} style={{ flexShrink: 0 }} /> {!network ? t("Choose a network to pay") : t("Pay {amount} with {network}", { amount: money(total), network: selNet?.label })}</>
           }
         </button>
+
+        {trade.fapshi_ref && (
+          <p className="hint" style={{ marginTop: 14, fontSize: 13.5 }}>
+            {t("Already paid, but this still says Payment pending?")}{" "}
+            <button type="button" className="link-btn" onClick={() => checkPayment()} disabled={checking}>
+              {checking ? t("Checking...") : t("Check payment")}
+            </button>
+          </p>
+        )}
+        {checkMsg && <p role="status" className="hint" style={{ marginTop: 8, fontSize: 14 }}>{t(checkMsg)}</p>}
       </section>
     ) : (
       // Waiting for the buyer to approve the prompt on their phone
       <section className="card card-pad tx-action" style={{ textAlign: "center" }} role="status">
         <span className="spinner" style={{ width: 36, height: 36, marginBottom: 14 }} />
-        <h2 className="section-title">Approve the payment on your phone</h2>
+        <h2 className="section-title">{t("Approve the payment on your phone")}</h2>
         <p style={{ fontSize: 14.5, margin: "6px auto 0", maxWidth: "40ch" }}>
-          We&apos;ve sent a payment prompt to <strong className="num" style={{ color: "var(--navy)" }}>+237{phone}</strong>. Approve it to finish paying.
+          {rich(t("We've sent a payment prompt to <b>{phone}</b>. Approve it to finish paying.", { phone: `+237${phone}` }), { b: (c) => <strong className="num" style={{ color: "var(--navy)" }}>{c}</strong> })}
         </p>
-        <p className="hint" style={{ margin: "10px 0 16px" }}>This page updates automatically once your payment is confirmed.</p>
-        <button onClick={() => { setPaymentSent(false); setPhone(""); setNetwork(""); }} className="btn btn-secondary btn-sm">
-          Use a different number
-        </button>
+        <p className="hint" style={{ margin: "10px 0 16px" }}>
+          {waitedOut
+            ? t("Still waiting. If you approved the payment, check it now. Otherwise you can try again.")
+            : t("This page updates automatically once your payment is confirmed.")}
+        </p>
+        <div className="btn-row" style={{ justifyContent: "center" }}>
+          {waitedOut && (
+            <button onClick={() => checkPayment()} disabled={checking} className="btn btn-primary btn-sm">
+              <RefreshCw size={15} /> {checking ? t("Checking...") : t("Check payment")}
+            </button>
+          )}
+          <button onClick={() => { setPaymentSent(false); setPhone(""); setNetwork(""); }} className="btn btn-secondary btn-sm">
+            {t("Use a different number")}
+          </button>
+        </div>
+        {checkMsg && <p role="status" className="hint" style={{ marginTop: 12, fontSize: 14 }}>{t(checkMsg)}</p>}
       </section>
     );
   } else if (isBuyer && ["shipped","funds_held"].includes(trade.status)) {
     action = (
       <section className="card card-pad tx-action fade-up" aria-labelledby="confirm-title">
         <h2 id="confirm-title" className="section-title">
-          {trade.status === "shipped" ? "Has your order arrived?" : "Already have your order?"}
+          {trade.status === "shipped" ? t("Has your order arrived?") : t("Already have your order?")}
         </h2>
         <p className="hint" style={{ margin: "2px 0 16px" }}>
           {trade.status === "shipped"
-            ? "Confirm only once you've received it and checked it."
-            : "The seller hasn't marked it as shipped yet. If it has already been handed to you, you can confirm now."}
-          {" "}After you confirm, you still have {REVIEW_HOURS} hours to tell us if anything is wrong before the seller is paid.
-          If it never arrived or isn&apos;t what was agreed, open a dispute instead and your payment stays held.
+            ? t("Confirm only once you've received it and checked it.")
+            : t("The seller hasn't marked it as shipped yet. If it has already been handed to you, you can confirm now.")}
+          {" "}{t("After you confirm, you still have {hours} hours to tell us if anything is wrong before the seller is paid.", { hours: REVIEW_HOURS })}{" "}
+          {t("If it never arrived or isn't what was agreed, open a dispute instead and your payment stays held.")}
         </p>
         <div className="btn-row">
           <button onClick={() => act("confirm")} disabled={acting} className="btn btn-primary" style={{ flex: 1 }}>
-            <CheckCircle size={17} /> Confirm delivery
+            <CheckCircle size={17} /> {t("Confirm delivery")}
           </button>
           <button onClick={() => act("dispute")} disabled={acting} className="btn btn-danger-outline">
-            <AlertTriangle size={17} /> Open a dispute
+            <AlertTriangle size={17} /> {t("Open a dispute")}
           </button>
         </div>
       </section>
@@ -318,55 +365,70 @@ export default function TradePage() {
       <section className="card card-pad tx-action fade-up" aria-labelledby="wait-title">
         {buyerPending ? (
           <>
-            <h2 id="wait-title" className="section-title">Waiting for the buyer to join Zola</h2>
+            <h2 id="wait-title" className="section-title">{t("Waiting for the buyer to join Zola")}</h2>
             <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
-              This buyer doesn&apos;t have a Zola account yet.{" "}
+              {t("This buyer doesn't have a Zola account yet.")}{" "}
               {inviteEmail && inviteWa
-                ? <>We invited them by email ({trade.buyer_email}) and WhatsApp (<span className="num">{prettyPhone(trade.buyer_phone)}</span>) to sign up so they can pay.</>
+                ? t("We invited them by email ({email}) and WhatsApp ({phone}) to sign up so they can pay.", { email: trade.buyer_email, phone: prettyPhone(trade.buyer_phone) })
                 : inviteEmail
-                  ? <>We invited them by email ({trade.buyer_email}) to sign up so they can pay. The WhatsApp message to <span className="num">{prettyPhone(trade.buyer_phone)}</span> didn&apos;t go through, so share the link with them too.</>
+                  ? t("We invited them by email ({email}) to sign up so they can pay. The WhatsApp message to {phone} didn't go through, so share the link with them too.", { email: trade.buyer_email, phone: prettyPhone(trade.buyer_phone) })
                   : inviteWa
-                    ? <>We invited them on WhatsApp (<span className="num">{prettyPhone(trade.buyer_phone)}</span>) to sign up so they can pay. The email to {trade.buyer_email} didn&apos;t go through.</>
-                    : <>Neither the email nor the WhatsApp invitation went through. Copy the link and send it to them yourself.</>}
-              {" "}Don&apos;t send anything until Zola confirms the payment is held.
+                    ? t("We invited them on WhatsApp ({phone}) to sign up so they can pay. The email to {email} didn't go through.", { email: trade.buyer_email, phone: prettyPhone(trade.buyer_phone) })
+                    : t("Neither the email nor the WhatsApp invitation went through. Copy the link and send it to them yourself.")}
+              {" "}{t("Don't send anything until Zola confirms the payment is held.")}
             </p>
             <div className="btn-row">
               <button onClick={notify} className="btn btn-secondary">
-                <RefreshCw size={16} /> Send the invitation again
+                <RefreshCw size={16} /> {t("Send the invitation again")}
               </button>
               <button onClick={copyInvite} className="btn btn-secondary">
-                <Copy size={16} /> {copied ? "Link copied" : "Copy invitation link"}
+                <Copy size={16} /> {copied ? t("Link copied") : t("Copy invitation link")}
               </button>
             </div>
-            {notified && <p role="status" style={{ fontSize: 14, color: "var(--emerald-press)", fontWeight: 600, marginTop: 10 }}>Invitation sent again.</p>}
+            {notified && <p role="status" style={{ fontSize: 14, color: "var(--emerald-press)", fontWeight: 600, marginTop: 10 }}>{t("Invitation sent again.")}</p>}
           </>
         ) : (
           <>
-            <h2 id="wait-title" className="section-title">Waiting for the buyer to pay</h2>
+            <h2 id="wait-title" className="section-title">{t("Waiting for the buyer to pay")}</h2>
             <p className="hint" style={{ margin: "2px 0 14px" }}>
-              {trade.buyer_name} has been notified. Don&apos;t send anything until Zola confirms the payment is held.
+              {t("{name} has been notified. Don't send anything until Zola confirms the payment is held.", { name: trade.buyer_name })}
             </p>
             <button onClick={notify} className="btn btn-secondary">
-              <RefreshCw size={16} /> Send a reminder
+              <RefreshCw size={16} /> {t("Send a reminder")}
             </button>
-            {notified && <p role="status" style={{ fontSize: 14, color: "var(--emerald-press)", fontWeight: 600, marginTop: 10 }}>Reminder sent.</p>}
+            {notified && <p role="status" style={{ fontSize: 14, color: "var(--emerald-press)", fontWeight: 600, marginTop: 10 }}>{t("Reminder sent.")}</p>}
           </>
         )}
-        {notifyMsg && <p role="alert" className="hint-error" style={{ marginTop: 10 }}>{notifyMsg}</p>}
+        {notifyMsg && <p role="alert" className="hint-error" style={{ marginTop: 10 }}>{t(notifyMsg)}</p>}
       </section>
     );
   } else if (isVendor && trade.status === "funds_held") {
     action = (
       <section className="card card-pad card-mint tx-action fade-up" aria-labelledby="ship-title">
-        <h2 id="ship-title" className="section-title">Payment has been secured</h2>
+        <h2 id="ship-title" className="section-title">{t("Payment has been secured")}</h2>
         <p style={{ fontSize: 14.5, margin: "2px 0 16px", color: "var(--emerald-press)" }}>
           {hasDelivery
-            ? <>Now <strong>send the item to Zola</strong>, not straight to the buyer. Zola delivers it, and the buyer has already paid for delivery. {handoverHow()} Once Zola has the item, mark it as sent.</>
-            : "Complete the work to receive your funds. Once you've delivered what was agreed, mark it as delivered."}
+            ? <>{rich(t("Now <b>send the item to Zola</b>, not straight to the buyer. Zola delivers it, and the buyer has already paid for delivery."), { b: (c) => <strong>{c}</strong> })} {handoverHow(lang)} {t("Once Zola has the item, mark it as sent.")}</>
+            : t("Complete the work to receive your funds. Once you've delivered what was agreed, mark it as delivered.")}
         </p>
         <button onClick={() => act("ship", { trackingNumber: "" })} disabled={acting} className="btn btn-primary">
-          <Truck size={17} /> {acting ? "Marking..." : hasDelivery ? "Mark as sent to Zola" : "Mark as delivered"}
+          <Truck size={17} /> {acting ? t("Marking...") : hasDelivery ? t("Mark as sent to Zola") : t("Mark as delivered")}
         </button>
+      </section>
+    );
+  } else if (isAdmin && trade.status === "pending_payment" && trade.fapshi_ref) {
+    /* A payment was started: the admin can ask Fapshi whether it went through */
+    action = (
+      <section className="card card-pad tx-action fade-up" aria-labelledby="check-title">
+        <h2 id="check-title" className="section-title">A payment was started</h2>
+        <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
+          The buyer was sent a payment prompt{trade.payment_started_at ? ` on ${fmtDateTime(trade.payment_started_at)}` : ""}.
+          If they say they paid but this still says Payment pending, ask Fapshi directly.
+        </p>
+        <button onClick={() => checkPayment()} disabled={checking} className="btn btn-secondary">
+          <RefreshCw size={16} /> {checking ? "Checking..." : "Check payment with Fapshi"}
+        </button>
+        {checkMsg && <p role="status" className="hint" style={{ marginTop: 10, fontSize: 14 }}>{checkMsg}</p>}
       </section>
     );
   } else if (isBuyer && trade.status === "pending_release") {
@@ -375,22 +437,22 @@ export default function TradePage() {
       <section className="card card-pad tx-action fade-up" aria-labelledby="review-title">
         {review.complaintOpen ? (
           <>
-            <h2 id="review-title" className="section-title">We&apos;ve received your complaint</h2>
+            <h2 id="review-title" className="section-title">{t("We've received your complaint")}</h2>
             <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
-              Zola is looking into it and will call or text you. The seller is not paid until it is settled.
+              {t("Zola is looking into it and will call or text you. The seller is not paid until it is settled.")}
             </p>
             <p className="said">{trade.complaint_text}</p>
-            <p className="said-meta" suppressHydrationWarning>Sent {fmtDateTime(trade.complaint_at)}</p>
-            <p className="hint" style={{ margin: "16px 0 10px", fontSize: 14 }}>Want to reach us sooner?</p>
+            <p className="said-meta" suppressHydrationWarning>{t("Sent {date}", { date: fmtDateTime(trade.complaint_at, lang) })}</p>
+            <p className="hint" style={{ margin: "16px 0 10px", fontSize: 14 }}>{t("Want to reach us sooner?")}</p>
             <SupportButtons small />
           </>
         ) : review.complaintResolved ? (
           <>
-            <h2 id="review-title" className="section-title">Your complaint has been resolved</h2>
+            <h2 id="review-title" className="section-title">{t("Your complaint has been resolved")}</h2>
             <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
               {review.windowOpen
-                ? `Zola closed your complaint. The seller is paid once the review ends on ${reviewUntil}.`
-                : "Zola closed your complaint and is releasing the payment to the seller."}
+                ? t("Zola closed your complaint. The seller is paid once the review ends on {date}.", { date: reviewUntil })
+                : t("Zola closed your complaint and is releasing the payment to the seller.")}
             </p>
             {trade.complaint_resolution && <p className="said">{trade.complaint_resolution}</p>}
             <div style={{ marginTop: 14 }}><SupportLine lead="Still not right?" /></div>
@@ -398,42 +460,41 @@ export default function TradePage() {
         ) : review.canComplain ? (
           !complaining ? (
             <>
-              <h2 id="review-title" className="section-title">Is everything okay with your order?</h2>
-              <p className="hint" style={{ margin: "2px 0 16px", fontSize: 14 }}>
-                Thanks for confirming delivery. This transaction is under review until{" "}
-                <strong style={{ color: "var(--navy)" }} suppressHydrationWarning>{reviewUntil}</strong> ({timeLeft(review.msLeft)} left).
-                If anything is wrong, make a complaint before then and your payment stays held. Zola may call or text you to check.
+              <h2 id="review-title" className="section-title">{t("Is everything okay with your order?")}</h2>
+              <p className="hint" style={{ margin: "2px 0 16px", fontSize: 14 }} suppressHydrationWarning>
+                {rich(t("Thanks for confirming delivery. This transaction is under review until <b>{until}</b> ({left} left).", { until: reviewUntil, left: timeLeft(review.msLeft, lang) }), { b: (c) => <strong style={{ color: "var(--navy)" }}>{c}</strong> })}{" "}
+                {t("If anything is wrong, make a complaint before then and your payment stays held. Zola may call or text you to check.")}
               </p>
               <button onClick={() => { setComplaining(true); setError(""); }} className="btn btn-secondary">
-                <MessageSquareWarning size={17} /> Make a complaint
+                <MessageSquareWarning size={17} /> {t("Make a complaint")}
               </button>
             </>
           ) : (
             <>
-              <h2 id="review-title" className="section-title">Make a complaint</h2>
+              <h2 id="review-title" className="section-title">{t("Make a complaint")}</h2>
               <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
-                Tell us what went wrong. Your payment stays held, and Zola will call or text you.
+                {t("Tell us what went wrong. Your payment stays held, and Zola will call or text you.")}
               </p>
               <div className="field" style={{ marginBottom: 14 }}>
-                <label className="label" htmlFor="complaint">What went wrong?</label>
+                <label className="label" htmlFor="complaint">{t("What went wrong?")}</label>
                 <textarea id="complaint" className="textarea" rows={4} maxLength={COMPLAINT_MAX} autoFocus
-                  placeholder="For example: the screen is cracked, or one item is missing from the box"
+                  placeholder={t("For example: the screen is cracked, or one item is missing from the box")}
                   value={complaint} onChange={e => setComplaint(e.target.value)} />
-                <p className="hint">{complaintLen < COMPLAINT_MIN ? "A sentence or two is enough." : `${complaintLen} of ${COMPLAINT_MAX} characters`}</p>
+                <p className="hint">{complaintLen < COMPLAINT_MIN ? t("A sentence or two is enough.") : t("{n} of {max} characters", { n: complaintLen, max: COMPLAINT_MAX })}</p>
               </div>
               <div className="btn-row">
                 <button onClick={sendComplaint} disabled={acting || complaintLen < COMPLAINT_MIN} className="btn btn-primary" style={{ flex: 1 }}>
-                  {acting ? "Sending..." : "Send complaint"}
+                  {acting ? t("Sending...") : t("Send complaint")}
                 </button>
-                <button onClick={() => setComplaining(false)} disabled={acting} className="btn btn-secondary">Cancel</button>
+                <button onClick={() => setComplaining(false)} disabled={acting} className="btn btn-secondary">{t("Cancel")}</button>
               </div>
             </>
           )
         ) : (
           <>
-            <h2 id="review-title" className="section-title">The review is over</h2>
+            <h2 id="review-title" className="section-title">{t("The review is over")}</h2>
             <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
-              The {REVIEW_HOURS} hours for making a complaint have passed, and Zola is releasing the payment to the seller.
+              {t("The {hours} hours for making a complaint have passed, and Zola is releasing the payment to the seller.", { hours: REVIEW_HOURS })}
             </p>
             <SupportLine lead="Something still wrong?" />
           </>
@@ -445,29 +506,28 @@ export default function TradePage() {
       <section className={`card card-pad tx-action fade-up${review.complaintOpen ? " card-wait" : ""}`} aria-labelledby="review-title">
         {review.complaintOpen ? (
           <>
-            <h2 id="review-title" className="section-title">The buyer reported a problem</h2>
+            <h2 id="review-title" className="section-title">{t("The buyer reported a problem")}</h2>
             <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
-              Your payment stays held while Zola looks into it. We may call or text you to hear your side.
+              {t("Your payment stays held while Zola looks into it. We may call or text you to hear your side.")}
             </p>
             <p className="said">{trade.complaint_text}</p>
-            <p className="said-meta" suppressHydrationWarning>Sent {fmtDateTime(trade.complaint_at)}</p>
-            <p className="hint" style={{ margin: "16px 0 10px", fontSize: 14 }}>You can also reach us directly.</p>
+            <p className="said-meta" suppressHydrationWarning>{t("Sent {date}", { date: fmtDateTime(trade.complaint_at, lang) })}</p>
+            <p className="hint" style={{ margin: "16px 0 10px", fontSize: 14 }}>{t("You can also reach us directly.")}</p>
             <SupportButtons small />
           </>
         ) : review.windowOpen ? (
           <>
-            <h2 id="review-title" className="section-title">Delivery confirmed, now under review</h2>
-            <p className="hint" style={{ margin: "2px 0 0", fontSize: 14 }}>
-              {trade.buyer_name} confirmed delivery. Zola reviews every delivery for {REVIEW_HOURS} hours and checks with the buyer.
-              If no problem is reported, your {money(trade.amount)} is released after{" "}
-              <strong style={{ color: "var(--navy)" }} suppressHydrationWarning>{reviewUntil}</strong>.
+            <h2 id="review-title" className="section-title">{t("Delivery confirmed, now under review")}</h2>
+            <p className="hint" style={{ margin: "2px 0 0", fontSize: 14 }} suppressHydrationWarning>
+              {t("{name} confirmed delivery. Zola reviews every delivery for {hours} hours and checks with the buyer.", { name: trade.buyer_name, hours: REVIEW_HOURS })}{" "}
+              {rich(t("If no problem is reported, your {amount} is released after <b>{until}</b>.", { amount: money(trade.amount), until: reviewUntil }), { b: (c) => <strong style={{ color: "var(--navy)" }}>{c}</strong> })}
             </p>
           </>
         ) : (
           <>
-            <h2 id="review-title" className="section-title">The review is over</h2>
+            <h2 id="review-title" className="section-title">{t("The review is over")}</h2>
             <p className="hint" style={{ margin: "2px 0 0", fontSize: 14 }}>
-              Zola is releasing your {money(trade.amount)}. You&apos;ll be notified when it reaches your wallet.
+              {t("Zola is releasing your {amount}. You'll be notified when it reaches your wallet.", { amount: money(trade.amount) })}
             </p>
           </>
         )}
@@ -592,7 +652,7 @@ export default function TradePage() {
 
       <main className="container main">
         <Link href={isAdmin ? "/admin" : "/dashboard"} className="back-link">
-          <ArrowLeft size={15} /> Back
+          <ArrowLeft size={15} /> {t("Back")}
         </Link>
 
         {/* Header */}
@@ -600,16 +660,16 @@ export default function TradePage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <StatusPill status={trade.status} />
             <h1 className="page-title" style={{ margin: "10px 0 4px", overflowWrap: "anywhere" }}>{trade.title}</h1>
-            <p className="tx-id">Transaction ID <strong>{shortId(trade.id)}</strong></p>
+            <p className="tx-id">{t("Transaction ID")} <strong>{shortId(trade.id)}</strong></p>
           </div>
           {canEdit && !editing && (
             <div className="btn-row" style={{ flexShrink: 0, flexWrap: "nowrap" }}>
               <button className="btn btn-secondary btn-sm" style={{ flex: "0 0 auto" }}
                 onClick={() => { setEditForm({ title: trade.title, description: trade.description, amount: String(trade.amount), deliveryDays: String(trade.delivery_days || 7), needsDelivery: trade.needs_delivery !== undefined ? trade.needs_delivery !== false : Number(trade.delivery_fee) > 0 }); setEditing(true); setEditErr(""); }}>
-                <Edit3 size={15} /> Edit
+                <Edit3 size={15} /> {t("Edit")}
               </button>
               <button className="btn btn-danger-outline btn-sm" style={{ flex: "0 0 auto" }} onClick={() => setDelConfirm(true)}>
-                <Trash2 size={15} /> Delete
+                <Trash2 size={15} /> {t("Delete")}
               </button>
             </div>
           )}
@@ -618,13 +678,13 @@ export default function TradePage() {
         {/* Delete confirm */}
         {delConfirm && (
           <div className="card card-pad card-danger fade-up" role="alertdialog" aria-labelledby="del-title" style={{ marginBottom: 16 }}>
-            <h2 id="del-title" className="section-title">Delete this transaction?</h2>
-            <p className="hint" style={{ margin: "2px 0 14px" }}>This can&apos;t be undone. The transaction and its activity history will be removed.</p>
+            <h2 id="del-title" className="section-title">{t("Delete this transaction?")}</h2>
+            <p className="hint" style={{ margin: "2px 0 14px" }}>{t("This can't be undone. The transaction and its activity history will be removed.")}</p>
             <div className="btn-row">
               <button onClick={deleteTrade} disabled={deleting} className="btn btn-danger">
-                {deleting ? "Deleting..." : "Delete transaction"}
+                {deleting ? t("Deleting...") : t("Delete transaction")}
               </button>
-              <button onClick={() => setDelConfirm(false)} className="btn btn-secondary">Keep it</button>
+              <button onClick={() => setDelConfirm(false)} className="btn btn-secondary">{t("Keep it")}</button>
             </div>
           </div>
         )}
@@ -633,49 +693,51 @@ export default function TradePage() {
         {editing && (
           <div className="card card-pad fade-up" style={{ marginBottom: 16 }}>
             <div className="card-head">
-              <h2 className="section-title">Edit transaction</h2>
-              <button onClick={() => setEditing(false)} className="icon-btn" aria-label="Close" style={{ width: 36, height: 36 }}><X size={17} /></button>
+              <h2 className="section-title">{t("Edit transaction")}</h2>
+              <button onClick={() => setEditing(false)} className="icon-btn" aria-label={t("Close")} style={{ width: 36, height: 36 }}><X size={17} /></button>
             </div>
-            {editErr && <div className="notice notice-danger" role="alert" style={{ marginBottom: 12 }}>{editErr}</div>}
+            {editErr && <div className="notice notice-danger" role="alert" style={{ marginBottom: 12 }}>{t(editErr)}</div>}
             <div className="stack" style={{ gap: 14 }}>
               <div className="field">
-                <label className="label" htmlFor="e-title">Title</label>
+                <label className="label" htmlFor="e-title">{t("Title")}</label>
                 <input id="e-title" className="input" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
               </div>
               <div className="field">
-                <label className="label" htmlFor="e-desc">Description</label>
+                <label className="label" htmlFor="e-desc">{t("Description")}</label>
                 <textarea id="e-desc" className="textarea" rows={3} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
               </div>
               <div className="form-grid-2">
                 <div className="field">
-                  <label className="label" htmlFor="e-amount">Item price (FCFA)</label>
+                  <label className="label" htmlFor="e-amount">{t("Item price (FCFA)")}</label>
                   <input id="e-amount" className="input num" type="number" min="1" inputMode="numeric" value={editForm.amount} onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))} />
                 </div>
                 <div className="field">
-                  <label className="label" htmlFor="e-days">Delivery time (days)</label>
+                  <label className="label" htmlFor="e-days">{t("Delivery time (days)")}</label>
                   <input id="e-days" className="input num" type="number" min="1" max="60" inputMode="numeric" value={editForm.deliveryDays} onChange={e => setEditForm(f => ({ ...f, deliveryDays: e.target.value }))} />
                 </div>
               </div>
               <div className="field">
-                <span className="label">Does it need to be delivered?</span>
-                <div className="seg" role="group" aria-label="Delivery">
+                <span className="label">{t("Does it need to be delivered?")}</span>
+                <div className="seg" role="group" aria-label={t("Delivery")}>
                   <button type="button" className="seg-item" aria-pressed={editForm.needsDelivery}
-                    onClick={() => setEditForm(f => ({ ...f, needsDelivery: true }))}>Yes, deliver it</button>
+                    onClick={() => setEditForm(f => ({ ...f, needsDelivery: true }))}>{t("Yes, deliver it")}</button>
                   <button type="button" className="seg-item" aria-pressed={!editForm.needsDelivery}
-                    onClick={() => setEditForm(f => ({ ...f, needsDelivery: false }))}>No, nothing to deliver</button>
+                    onClick={() => setEditForm(f => ({ ...f, needsDelivery: false }))}>{t("No, nothing to deliver")}</button>
                 </div>
               </div>
               {Number(editForm.amount) > 0 && (
                 <div className="kv" style={{ padding: "10px 14px", background: "var(--bg)", borderRadius: "var(--r-md)" }}>
-                  <span>Buyer pays, including the {feePercentLabel(Number(editForm.amount))} Zola fee{editQuote.deliveryFee > 0 ? ` and ${money(editQuote.deliveryFee)} delivery` : ""}</span>
+                  <span>{editQuote.deliveryFee > 0
+                    ? t("Buyer pays, including the {rate} Zola fee and {delivery} delivery", { rate: feePercentLabel(Number(editForm.amount)), delivery: money(editQuote.deliveryFee) })
+                    : t("Buyer pays, including the {rate} Zola fee", { rate: feePercentLabel(Number(editForm.amount)) })}</span>
                   <span>{money(editQuote.total)}</span>
                 </div>
               )}
               <div className="btn-row">
                 <button onClick={saveEdit} disabled={editSaving} className="btn btn-primary" style={{ flex: 1 }}>
-                  <Save size={16} /> {editSaving ? "Saving..." : "Save changes"}
+                  <Save size={16} /> {editSaving ? t("Saving...") : t("Save changes")}
                 </button>
-                <button onClick={() => setEditing(false)} className="btn btn-secondary">Cancel</button>
+                <button onClick={() => setEditing(false)} className="btn btn-secondary">{t("Cancel")}</button>
               </div>
             </div>
           </div>
@@ -684,7 +746,7 @@ export default function TradePage() {
         {/* Error */}
         {error && (
           <div className="notice notice-danger" role="alert" style={{ marginBottom: 16 }}>
-            <AlertTriangle size={16} /> <span>{error}</span>
+            <AlertTriangle size={16} /> <span>{t(error)}</span>
           </div>
         )}
 
@@ -692,26 +754,26 @@ export default function TradePage() {
           <div className="tx-main">
 
             {/* Where the money is, what happens next, who acts */}
-            <section className="card card-pad tx-status fade-up" aria-label="Transaction status">
+            <section className="card card-pad tx-status fade-up" aria-label={t("Transaction status")}>
               {step > 0 && <div style={{ marginBottom: 26 }}><Steps step={step} /></div>}
 
               <MoneyRail
                 at={s.money}
                 you={isBuyer ? "buyer" : isVendor ? "seller" : undefined}
-                names={{ buyer: trade.buyer_name?.split(" ")[0], seller: trade.vendor_name?.split(" ")[0] }}
+                names={{ buyer: buyerPending ? t("Invited buyer") : trade.buyer_name?.split(" ")[0], seller: trade.vendor_name?.split(" ")[0] }}
               />
               <p className="where">{story.where}</p>
 
               <div className="answers">
                 <div className="answer">
-                  <p className="answer-q">What happens next</p>
+                  <p className="answer-q">{t("What happens next")}</p>
                   <p className="answer-a">{story.next}</p>
                 </div>
                 <div className="answer">
-                  <p className="answer-q">Who needs to act</p>
+                  <p className="answer-q">{t("Who needs to act")}</p>
                   <p className="answer-a" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     {story.who}
-                    {story.yourMove && <span className="tag tag-you">Your move</span>}
+                    {story.yourMove && <span className="tag tag-you">{t("Your move")}</span>}
                   </p>
                 </div>
               </div>
@@ -721,9 +783,9 @@ export default function TradePage() {
 
             {/* Activity */}
             <section className="card card-pad tx-activity fade-up" aria-labelledby="activity-title">
-              <h2 id="activity-title" className="section-title" style={{ marginBottom: 16 }}>Activity</h2>
+              <h2 id="activity-title" className="section-title" style={{ marginBottom: 16 }}>{t("Activity")}</h2>
               {events.length === 0
-                ? <p className="hint">Nothing has happened on this transaction yet.</p>
+                ? <p className="hint">{t("Nothing has happened on this transaction yet.")}</p>
                 : <Timeline events={events} />}
             </section>
           </div>
@@ -732,34 +794,34 @@ export default function TradePage() {
           <aside className="tx-aside">
             <section className="card card-pad fade-up" aria-labelledby="money-title">
               <p id="money-title" className="stat-label" style={{ marginBottom: 4 }}>
-                {isVendor ? "You receive" : isBuyer ? (hasPaid ? "You paid" : "Total to pay") : "Buyer pays"}
+                {isVendor ? t("You receive") : isBuyer ? (hasPaid ? t("You paid") : t("Total to pay")) : t("Buyer pays")}
               </p>
               <p className="amount-xl">{money(isVendor ? trade.amount : total)}</p>
 
               <div style={{ marginTop: 14 }}>
-                <div className="kv"><span>Item price</span><span>{money(trade.amount)}</span></div>
-                <div className="kv"><span>Zola fee ({feePercentOf(trade)}){isVendor ? ", paid by the buyer" : ""}</span><span>{money(trade.fee)}</span></div>
-                {deliveryFee > 0 && <div className="kv"><span>Delivery{isVendor ? ", paid by the buyer" : ""}</span><span>{money(deliveryFee)}</span></div>}
-                <div className="kv kv-total"><span>{isBuyer ? "Total" : "Buyer pays"}</span><span>{money(total)}</span></div>
+                <div className="kv"><span>{t("Item price")}</span><span>{money(trade.amount)}</span></div>
+                <div className="kv"><span>{isVendor ? t("Zola fee ({rate}), paid by the buyer", { rate: feePercentOf(trade) }) : t("Zola fee ({rate})", { rate: feePercentOf(trade) })}</span><span>{money(trade.fee)}</span></div>
+                {deliveryFee > 0 && <div className="kv"><span>{isVendor ? t("Delivery, paid by the buyer") : t("Delivery")}</span><span>{money(deliveryFee)}</span></div>}
+                <div className="kv kv-total"><span>{isBuyer ? t("Total") : t("Buyer pays")}</span><span>{money(total)}</span></div>
               </div>
 
               {!isBuyer && (
                 <div className="receipt-out" style={{ marginTop: 14 }}>
-                  <span>{isVendor ? "Your payout" : "Seller receives"}</span><strong>{money(trade.amount)}</strong>
+                  <span>{isVendor ? t("Your payout") : t("Seller receives")}</span><strong>{money(trade.amount)}</strong>
                 </div>
               )}
               {isVendor && (
-                <div className="kv" style={{ marginTop: 8 }}><span>Payout status</span><span>{PAYOUT_STATUS[trade.status] || "—"}</span></div>
+                <div className="kv" style={{ marginTop: 8 }}><span>{t("Payout status")}</span><span>{PAYOUT_STATUS[trade.status] ? t(PAYOUT_STATUS[trade.status]) : "—"}</span></div>
               )}
               {isBuyer && isHeld && (
                 <div className="receipt-out" style={{ marginTop: 14 }}>
-                  <span>Held by Zola for the seller</span><strong>{money(trade.amount)}</strong>
+                  <span>{t("Held by Zola for the seller")}</span><strong>{money(trade.amount)}</strong>
                 </div>
               )}
             </section>
 
             <section className="card card-pad fade-up" aria-labelledby="details-title">
-              <h2 id="details-title" className="section-title" style={{ marginBottom: 10 }}>Details</h2>
+              <h2 id="details-title" className="section-title" style={{ marginBottom: 10 }}>{t("Details")}</h2>
 
               {trade.description && (
                 <p style={{ fontSize: 14.5, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{trade.description}</p>
@@ -776,25 +838,25 @@ export default function TradePage() {
                 <div key={p.role} className="party">
                   <span className="avatar">{initials(p.name, p.avatar)}</span>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <p className="party-role">{p.role}</p>
+                    <p className="party-role">{t(p.role)}</p>
                     <p className="party-name">{p.name || "—"}</p>
                   </div>
-                  {p.you && <span className="tag tag-you">You</span>}
+                  {p.you && <span className="tag tag-you">{t("You")}</span>}
                 </div>
               ))}
 
               <hr className="divider" />
 
-              <div className="kv"><span>Delivery</span><span>{trade.needs_delivery === false ? "Not needed for this transaction" : DELIVERY_STATUS[trade.status] || "—"}</span></div>
+              <div className="kv"><span>{t("Delivery")}</span><span>{trade.needs_delivery === false ? t("Not needed for this transaction") : DELIVERY_STATUS[trade.status] ? t(DELIVERY_STATUS[trade.status]) : "—"}</span></div>
               {trade.delivery_deadline
-                ? <div className="kv"><span>Deliver by</span><span suppressHydrationWarning>{fmtDate(trade.delivery_deadline)}</span></div>
+                ? <div className="kv"><span>{t("Deliver by")}</span><span suppressHydrationWarning>{fmtDate(trade.delivery_deadline, lang)}</span></div>
                 : trade.delivery_days && trade.status === "pending_payment"
-                  ? <div className="kv"><span>Delivery time</span><span>{trade.delivery_days} day{Number(trade.delivery_days) === 1 ? "" : "s"} after payment</span></div>
+                  ? <div className="kv"><span>{t("Delivery time")}</span><span>{Number(trade.delivery_days) === 1 ? t("1 day after payment") : t("{n} days after payment", { n: trade.delivery_days })}</span></div>
                   : null}
-              {trade.tracking_number && <div className="kv"><span>Tracking number</span><span>{trade.tracking_number}</span></div>}
-              {trade.created_at && <div className="kv"><span>Created</span><span suppressHydrationWarning>{fmtDate(trade.created_at)}</span></div>}
+              {trade.tracking_number && <div className="kv"><span>{t("Tracking number")}</span><span>{trade.tracking_number}</span></div>}
+              {trade.created_at && <div className="kv"><span>{t("Created")}</span><span suppressHydrationWarning>{fmtDate(trade.created_at, lang)}</span></div>}
               {deliveryFee > 0 && !isVendor && !["complete", "cancelled"].includes(trade.status) && (
-                <p className="hint" style={{ marginTop: 10 }}>{DELIVERY_NOTE}</p>
+                <p className="hint" style={{ marginTop: 10 }}>{t(DELIVERY_NOTE)}</p>
               )}
             </section>
 
@@ -812,13 +874,13 @@ export default function TradePage() {
             {isBuyer && !["complete", "cancelled"].includes(trade.status) && (
               <p className="protect" style={{ padding: "0 4px" }}>
                 <ShieldCheck size={17} />
-                <span>Your payment is protected by Zola until the transaction is completed.</span>
+                <span>{t("Your payment is protected by Zola until the transaction is completed.")}</span>
               </p>
             )}
             {isVendor && isHeld && trade.status !== "disputed" && (
               <p className="protect" style={{ padding: "0 4px" }}>
                 <ShieldCheck size={17} />
-                <span>The buyer&apos;s payment is held by Zola. It is released to you after delivery is confirmed and the {REVIEW_HOURS}-hour review.</span>
+                <span>{t("The buyer's payment is held by Zola. It is released to you after delivery is confirmed and the {hours}-hour review.", { hours: REVIEW_HOURS })}</span>
               </p>
             )}
             {!isAdmin && <div style={{ padding: "0 4px" }}><SupportLine /></div>}

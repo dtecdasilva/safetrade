@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { Moon, Sun } from "lucide-react";
 import { DEFAULT_THEME, THEME_KEY } from "@/lib/theme";
+import { useT } from "@/components/I18n";
 
 /**
  * Switches between the light and dark theme and remembers the choice.
@@ -9,6 +10,7 @@ import { DEFAULT_THEME, THEME_KEY } from "@/lib/theme";
  * so the button renders the same on the server and in the browser.
  */
 export default function ThemeToggle({ variant = "icon", className = "" }: { variant?: "icon" | "text"; className?: string }) {
+  const { t } = useT();
   // Until someone picks a theme, keep following the device setting if that's the default.
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -35,15 +37,15 @@ export default function ThemeToggle({ variant = "icon", className = "" }: { vari
       <button type="button" onClick={toggle} className={`theme-toggle theme-text ${className}`}>
         <Moon size={15} className="theme-icon-moon" />
         <Sun size={15} className="theme-icon-sun" />
-        <span className="when-light">Dark theme</span>
-        <span className="when-dark">Light theme</span>
+        <span className="when-light">{t("Dark theme")}</span>
+        <span className="when-dark">{t("Light theme")}</span>
       </button>
     );
   }
 
   return (
     <button type="button" onClick={toggle} className={`icon-btn theme-toggle ${className}`}
-      aria-label="Switch between light and dark theme" title="Switch theme">
+      aria-label={t("Switch between light and dark theme")} title={t("Switch theme")}>
       <Moon size={18} className="theme-icon-moon" />
       <Sun size={18} className="theme-icon-sun" />
     </button>

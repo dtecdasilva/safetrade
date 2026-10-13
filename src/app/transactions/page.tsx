@@ -6,8 +6,11 @@ import { getSession } from "@/lib/auth";
 import { getDb, initDb } from "@/lib/db";
 import Navbar from "@/components/Navbar";
 import TradeList from "@/components/TradeList";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Transactions" };
+export function generateMetadata(): Metadata {
+  return { title: getT().t("Transactions") };
+}
 
 export default async function TransactionsPage() {
   const session = await getSession();
@@ -24,6 +27,7 @@ export default async function TransactionsPage() {
     .sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
 
   const pendingRelease = trades.filter(t => t.status === "pending_release").length;
+  const { t } = getT();
 
   return (
     <div className="page">
@@ -31,11 +35,11 @@ export default async function TransactionsPage() {
       <main className="container main" style={{ maxWidth: 820 }}>
         <div className="dash-head">
           <div>
-            <h1 className="page-title">Transactions</h1>
-            <p className="page-sub">Every transaction you&apos;re part of, newest first.</p>
+            <h1 className="page-title">{t("Transactions")}</h1>
+            <p className="page-sub">{t("Every transaction you're part of, newest first.")}</p>
           </div>
           {session.role === "vendor" && (
-            <Link href="/trade/new" className="btn btn-primary"><Plus size={17} /> New transaction</Link>
+            <Link href="/trade/new" className="btn btn-primary"><Plus size={17} /> {t("New transaction")}</Link>
           )}
         </div>
         <TradeList trades={trades} role={session.role} pendingRelease={pendingRelease} />

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, Eye, EyeOff } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { useT } from "@/components/I18n";
 import { PageLoader, PhoneField } from "@/components/ui";
 import { fmtDate, roleLabel } from "@/lib/zola";
 
@@ -13,6 +14,7 @@ interface Profile {
 }
 
 export default function ProfilePage() {
+  const { t, lang } = useT();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [form, setForm]       = useState({ name: "", email: "", phone: "" });
@@ -82,65 +84,65 @@ export default function ProfilePage() {
 
       <main className="container main narrow">
         <Link href={isAdmin ? "/admin" : "/dashboard"} className="back-link">
-          <ArrowLeft size={15} /> Back
+          <ArrowLeft size={15} /> {t("Back")}
         </Link>
 
         <div style={{ marginBottom: 24 }}>
-          <h1 className="page-title">Profile</h1>
+          <h1 className="page-title">{t("Profile")}</h1>
           <p className="page-sub" suppressHydrationWarning>
-            {roleLabel(profile.role)} account{profile.created_at ? `, member since ${fmtDate(profile.created_at)}` : ""}
+            {t(`${roleLabel(profile.role)} account`)}{profile.created_at ? t(", member since {date}", { date: fmtDate(profile.created_at, lang) }) : ""}
           </p>
         </div>
 
         <div className="stack">
           {/* Details */}
           <form onSubmit={saveProfile} className="card card-pad stack" aria-labelledby="details-title">
-            <h2 id="details-title" className="section-title">Your details</h2>
+            <h2 id="details-title" className="section-title">{t("Your details")}</h2>
 
-            {error && <div className="notice notice-danger" role="alert">{error}</div>}
+            {error && <div className="notice notice-danger" role="alert">{t(error)}</div>}
             {saved && !error && (
-              <div className="notice notice-ok" role="status"><CheckCircle size={16} /> Your profile has been updated.</div>
+              <div className="notice notice-ok" role="status"><CheckCircle size={16} /> {t("Your profile has been updated.")}</div>
             )}
 
             <div className="field">
-              <label className="label" htmlFor="p-name">Full name</label>
+              <label className="label" htmlFor="p-name">{t("Full name")}</label>
               <input id="p-name" className="input" type="text" autoComplete="name" value={form.name}
                 onChange={(e) => { setForm((f) => ({ ...f, name: e.target.value })); setSaved(false); }} required />
-              <p className="hint">This is the name the other side sees on your transactions.</p>
+              <p className="hint">{t("This is the name the other side sees on your transactions.")}</p>
             </div>
 
             <div className="field">
-              <label className="label" htmlFor="p-email">Email</label>
+              <label className="label" htmlFor="p-email">{t("Email")}</label>
               <input id="p-email" className="input" type="email" autoComplete="email" value={form.email} disabled={isAdmin}
                 onChange={(e) => { setForm((f) => ({ ...f, email: e.target.value })); setSaved(false); }} required />
               <p className="hint">
                 {isAdmin
-                  ? "The admin sign-in address is fixed."
+                  ? t("The admin sign-in address is fixed.")
                   : profile.signed_up_with_google
-                    ? "You sign in with this email. Google sign-in keeps working if you change it."
-                    : "You sign in with this email. Transaction emails and password reset links are sent to it."}
+                    ? t("You sign in with this email. Google sign-in keeps working if you change it.")
+                    : t("You sign in with this email. Transaction emails and password reset links are sent to it.")}
               </p>
             </div>
 
             <div className="field">
-              <label className="label" htmlFor="p-phone">WhatsApp number</label>
+              <label className="label" htmlFor="p-phone">{t("WhatsApp number")}</label>
               <PhoneField id="p-phone" value={form.phone} required={!isAdmin}
                 onChange={(v) => { setForm((f) => ({ ...f, phone: v })); setSaved(false); }} />
               <p className="hint">
                 {profile.role === "buyer"
-                  ? "Sellers use this number to send you transactions, so it can only belong to one account."
-                  : "Used for transaction updates. A number can only belong to one account."}
+                  ? t("Sellers use this number to send you transactions, so it can only belong to one account.")
+                  : t("Used for transaction updates. A number can only belong to one account.")}
               </p>
             </div>
 
             <div className="btn-row">
               <button type="submit" disabled={!canSave} className="btn btn-primary">
-                {saving ? "Saving..." : "Save changes"}
+                {saving ? t("Saving...") : t("Save changes")}
               </button>
               {changed && !saving && (
                 <button type="button" className="btn btn-secondary"
                   onClick={() => { setForm({ name: profile.name, email: profile.email, phone: profile.phone }); setError(""); }}>
-                  Discard
+                  {t("Discard")}
                 </button>
               )}
             </div>
@@ -149,22 +151,22 @@ export default function ProfilePage() {
           {/* Password */}
           <form onSubmit={savePassword} className="card card-pad stack" aria-labelledby="pw-title">
             <div>
-              <h2 id="pw-title" className="section-title">{profile.has_password ? "Change password" : "Set a password"}</h2>
+              <h2 id="pw-title" className="section-title">{profile.has_password ? t("Change password") : t("Set a password")}</h2>
               {!profile.has_password && (
                 <p className="hint" style={{ marginTop: 2 }}>
-                  You signed up with Google, so you don&apos;t have a password yet. Set one if you also want to sign in with your email.
+                  {t("You signed up with Google, so you don't have a password yet. Set one if you also want to sign in with your email.")}
                 </p>
               )}
             </div>
 
-            {pwError && <div className="notice notice-danger" role="alert">{pwError}</div>}
+            {pwError && <div className="notice notice-danger" role="alert">{t(pwError)}</div>}
             {pwSaved && !pwError && (
-              <div className="notice notice-ok" role="status"><CheckCircle size={16} /> Your password has been updated.</div>
+              <div className="notice notice-ok" role="status"><CheckCircle size={16} /> {t("Your password has been updated.")}</div>
             )}
 
             {profile.has_password && (
               <div className="field">
-                <label className="label" htmlFor="pw-current">Current password</label>
+                <label className="label" htmlFor="pw-current">{t("Current password")}</label>
                 <input id="pw-current" className="input" type={showPw ? "text" : "password"} autoComplete="current-password"
                   value={pw.current} onChange={(e) => { setPw((p) => ({ ...p, current: e.target.value })); setPwSaved(false); }} />
               </div>
@@ -172,28 +174,28 @@ export default function ProfilePage() {
 
             <div className="form-grid-2">
               <div className="field">
-                <label className="label" htmlFor="pw-next">New password</label>
+                <label className="label" htmlFor="pw-next">{t("New password")}</label>
                 <div className="input-wrap">
                   <input id="pw-next" className="input" type={showPw ? "text" : "password"} autoComplete="new-password"
-                    placeholder="At least 8 characters" minLength={8}
+                    placeholder={t("At least 8 characters")} minLength={8}
                     value={pw.next} onChange={(e) => { setPw((p) => ({ ...p, next: e.target.value })); setPwSaved(false); }} />
                   <button type="button" className="input-affix" onClick={() => setShowPw((s) => !s)}
-                    aria-label={showPw ? "Hide passwords" : "Show passwords"}>
+                    aria-label={showPw ? t("Hide passwords") : t("Show passwords")}>
                     {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
                 </div>
               </div>
               <div className="field">
-                <label className="label" htmlFor="pw-confirm">Confirm new password</label>
+                <label className="label" htmlFor="pw-confirm">{t("Confirm new password")}</label>
                 <input id="pw-confirm" className={`input${mismatch ? " is-invalid" : ""}`} type={showPw ? "text" : "password"} autoComplete="new-password"
                   value={pw.confirm} onChange={(e) => { setPw((p) => ({ ...p, confirm: e.target.value })); setPwSaved(false); }} />
-                {mismatch && <p className="hint-error">Passwords do not match</p>}
+                {mismatch && <p className="hint-error">{t("Passwords do not match")}</p>}
               </div>
             </div>
 
             <div>
               <button type="submit" disabled={!canSavePw} className="btn btn-primary">
-                {pwSaving ? "Updating..." : profile.has_password ? "Update password" : "Set password"}
+                {pwSaving ? t("Updating...") : profile.has_password ? t("Update password") : t("Set password")}
               </button>
             </div>
           </form>
