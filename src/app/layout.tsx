@@ -4,6 +4,7 @@ import { themeInitScript } from "@/lib/theme";
 import PwaSetup from "@/components/PwaSetup";
 import { I18nProvider } from "@/components/I18n";
 import { getLang } from "@/lib/i18n/server";
+import { headers } from "next/headers";
 
 export const metadata: Metadata = {
   title: {
@@ -34,6 +35,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const lang = getLang();
+  // Pickup (pickup.zolahq.com) is kept light: no install prompt, no payment widget
+  const pickup = headers().get("x-zola-site") === "pickup";
   return (
     <html lang={lang} suppressHydrationWarning>
       <head>
@@ -43,9 +46,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <I18nProvider lang={lang}>
           {children}
-          <PwaSetup />
+          {!pickup && <PwaSetup />}
         </I18nProvider>
-        <script type="text/javascript" src="https://www.monetbil.com/widget/v2/monetbil.min.js"></script>
+        {!pickup && <script type="text/javascript" src="https://www.monetbil.com/widget/v2/monetbil.min.js"></script>}
       </body>
     </html>
   );

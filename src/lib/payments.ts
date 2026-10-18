@@ -12,6 +12,7 @@ import { getDb } from "@/lib/db";
 import { getPaymentStatus } from "@/lib/fapshi";
 import { notifyTradeMove } from "@/lib/notifications";
 import { notifyVendorPaymentReceived } from "@/lib/whatsapp";
+import { startDelivery } from "@/lib/pickup/deliveries";
 
 export type PaymentCheck =
   | "paid"          // confirmed just now: the transaction is now held by Zola
@@ -84,6 +85,9 @@ export async function confirmPayment(tradeId: string, transId: string): Promise<
   });
 
   await notifyTradeMove("paid", { ...(trade as any), id: tradeId });
+
+  // Goods sent through an agency: Pickup assigns a rider now
+  await startDelivery(tradeId);
 
   try {
     const vendor = (await db.collection("users").doc(trade.vendor_id).get()).data();

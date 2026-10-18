@@ -6,6 +6,7 @@ import { createToken, verifyTemp, SessionUser } from "@/lib/auth";
 import { phoneInUse, PHONE_TAKEN } from "@/lib/users";
 import { claimInvitedTrades } from "@/lib/invites";
 import { getLang } from "@/lib/i18n/server";
+import { sendWelcomeEmail } from "@/lib/welcome";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,8 @@ export async function POST(req: NextRequest) {
 
     // A seller may already have created a transaction for this person
     const claimed = await claimInvitedTrades(db, { id, name, email: pending.email, phone: cleanPhone, avatar, role });
+
+    await sendWelcomeEmail({ name, email: pending.email, role, lang: getLang() });
 
     const res = NextResponse.json({ user, success: true, tradeId: claimed[0] || null, waiting: claimed.length });
     res.cookies.set("st_token", token, {

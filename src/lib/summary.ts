@@ -22,11 +22,19 @@ export interface DailySummary {
 }
 
 export async function buildDailySummary(db: any, now: number = Date.now()): Promise<DailySummary> {
-  const [tradesSnap, wSnap, usersSnap] = await Promise.all([
+  const [tradesSnap, wSnap, usersSnap, reportsSnap, waitSnap, ridersSnap, rwSnap] = await Promise.all([
     db.collection("trades").get(),
     db.collection("withdrawals").where("status", "==", "pending").get(),
     db.collection("users").get(),
+    db.collection("reports").where("status", "==", "open").get(),
+    db.collection("deliveries").where("status", "==", "waiting_rider").get(),
+    db.collection("riders").where("status", "==", "pending").get(),
+    db.collection("rider_withdrawals").where("status", "==", "pending").get(),
   ]);
+  const noRider: any[] = waitSnap.docs.map((d: any) => d.data());
+  const newRiders: any[] = ridersSnap.docs.map((d: any) => d.data());
+  const riderW: any[] = rwSnap.docs.map((d: any) => d.data());
+  const reports: any[] = reportsSnap.docs.map((d: any) => d.data());
   const trades: any[] = tradesSnap.docs.map((d: any) => d.data());
   const withdrawals: any[] = wSnap.docs.map((d: any) => d.data());
   const users: any[] = usersSnap.docs.map((d: any) => d.data());
@@ -40,7 +48,7 @@ export async function buildDailySummary(db: any, now: number = Date.now()): Prom
   const toCall     = review.filter((x) => !x.r.complaintOpen && !x.r.contacted && !!x.r.endsAt);
   const toRelease  = review.filter((x) => x.r.canRelease);
   const disputes   = trades.filter((t) => t.status === "disputed");
-  const toDeliver  = trades.filter((t) => t.status === "shipped" && isGoods(t));
+  const toDeliver  = trades.filter((t) => t.status === "shipped" && isGoods(t) && !t.dest_branch); // Pickup riders handle the rest
   const stuck      = trades.filter((t) => {
     if (t.status !== "pending_payment" || !t.payment_started_at) return false;
     const age = now - Date.parse(t.payment_started_at);
@@ -54,6 +62,14 @@ export async function buildDailySummary(db: any, now: number = Date.now()): Prom
       items: toCall.map(({ t, r }) => ({ url: link(t), text: `${t.title}: call ${t.buyer_name}${t.buyer_phone ? ` on +237 ${t.buyer_phone}` : ""}. Review ends ${when(r.endsAt)}.` })) },
     { title: `Payments ready to release (${toRelease.length})`,
       items: toRelease.map(({ t }) => ({ url: link(t), text: `${t.title}: release ${fcfa(t.amount)} to ${t.vendor_name}.` })) },
+    { title: `Seller reports to review (${reports.length})`,
+      items: reports.map((r) => ({ url: `${base}/admin?tab=reports`, text: `${r.vendor_name}, reported by ${r.reporter_name} on “${r.trade_title}”: ${String(r.details || "").slice(0, 90)}` })) },
+    { title: `Parcels with no rider yet (${noRider.length})`,
+      items: noRider.map((d) => ({ url: link({ id: d.trade_id }), text: `${d.title}: no free rider in ${d.branch?.city} can carry ${fcfa(d.amount)}. Assign one, or ask a rider to top up.` })) },
+    { title: `Riders to approve (${newRiders.length})`,
+      items: newRiders.map((r) => ({ url: `${base}/admin?tab=riders`, text: `${r.name}, ${r.city}, +237 ${r.phone}: check their ID, then approve.` })) },
+    { title: `Rider withdrawals to send (${riderW.length})`,
+      items: riderW.map((w) => ({ url: `${base}/admin?tab=riders`, text: `${w.rider_name}: ${fcfa(w.amount)} to +237 ${w.phone}.` })) },
     { title: `Withdrawals to send (${withdrawals.length})`,
       items: withdrawals.map((w) => ({ url: `${base}/admin`, text: `${w.vendor_name}: ${fcfa(w.amount)} to ${w.network}, +237 ${w.phone}. Asked ${when(w.created_at)}.` })) },
     { title: `Items with Zola to deliver (${toDeliver.length})`,
@@ -63,7 +79,7 @@ export async function buildDailySummary(db: any, now: number = Date.now()): Prom
     { title: `Payments that may be stuck (${stuck.length})`,
       items: stuck.map((t) => ({ url: link(t), text: `${t.title}: ${t.buyer_name} started paying ${when(t.payment_started_at)} and it still says Payment pending. Open it and press Check payment.` })) },
   ];
-  const waiting = complaints.length + toCall.length + toRelease.length + withdrawals.length + toDeliver.length + disputes.length + stuck.length;
+  const waiting = complaints.length + toCall.length + toRelease.length + reports.length + noRider.length + newRiders.length + riderW.length + withdrawals.length + toDeliver.length + disputes.length + stuck.length;
   const needs = sections.filter((s) => s.items.length);
 
   // The last 24 hours

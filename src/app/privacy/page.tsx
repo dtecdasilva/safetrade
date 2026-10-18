@@ -20,6 +20,7 @@ const EN: LegalSection[] = [
       "Your transactions: the item or service, description, prices, delivery details, the other person's name, and what happens at each step, including complaints and our notes.",
       "Payments and withdrawals: the mobile money number and network you use, amounts and payment references. We never see or keep your mobile money PIN.",
       "Messages we send you, such as notifications, emails and WhatsApp messages, and notes from our calls with you about a transaction.",
+      "Reports: what you tell us when you report a seller, and reports other buyers make about you as a seller, with our notes and whether your account is flagged.",
       "Basic technical information needed to keep the site working and secure, such as when you signed in.",
     ],
   ]},
@@ -35,7 +36,8 @@ const EN: LegalSection[] = [
   ]},
   { title: "Who sees it", body: [
     [
-      "The other person in a transaction sees your name. A seller who creates a transaction already knows the buyer's phone number, and an invited buyer's email.",
+      "The other person in a transaction sees your name. Whoever creates a transaction already knows the other person's phone number, and the email of someone they invite.",
+      "If you report a seller, only Zola sees your report. The seller is not told who reported them. If we flag a seller, buyers see a warning, but not the reports themselves.",
       "Zola's team, to run transactions and help you.",
       "Companies that provide our services: Google Firebase (where our data is stored), Vercel (where the site runs), Fapshi (mobile money payments), Resend (emails), Meta (WhatsApp messages) and Google (if you sign in with Google). They use your information only to provide that service.",
       "Authorities, when the law requires it.",
@@ -76,6 +78,7 @@ const FR: LegalSection[] = [
       "Vos transactions : l'article ou le service, la description, les prix, les détails de livraison, le nom de l'autre partie, et ce qui se passe à chaque étape, y compris les réclamations et nos notes.",
       "Paiements et retraits : le numéro et le réseau Mobile Money que vous utilisez, les montants et les références de paiement. Nous ne voyons et ne gardons jamais votre code PIN Mobile Money.",
       "Les messages que nous vous envoyons (notifications, e-mails, messages WhatsApp) et les notes de nos appels avec vous au sujet d'une transaction.",
+      "Les signalements : ce que vous nous dites quand vous signalez un vendeur, et les signalements d'autres acheteurs à votre sujet en tant que vendeur, avec nos notes et le fait que votre compte soit signalé ou non.",
       "Les informations techniques de base nécessaires au bon fonctionnement et à la sécurité du site, comme l'heure de votre connexion.",
     ],
   ]},
@@ -91,7 +94,8 @@ const FR: LegalSection[] = [
   ]},
   { title: "Qui les voit", body: [
     [
-      "L'autre partie d'une transaction voit votre nom. Un vendeur qui crée une transaction connaît déjà le numéro de l'acheteur, et l'e-mail d'un acheteur invité.",
+      "L'autre partie d'une transaction voit votre nom. Celui qui crée une transaction connaît déjà le numéro de l'autre partie, et l'e-mail de la personne qu'il invite.",
+      "Si vous signalez un vendeur, seul Zola voit votre signalement. Le vendeur ne sait pas qui l'a signalé. Si nous signalons un vendeur, les acheteurs voient un avertissement, mais pas les signalements eux-mêmes.",
       "L'équipe Zola, pour faire fonctionner les transactions et vous aider.",
       "Les entreprises qui fournissent nos services : Google Firebase (où nos données sont stockées), Vercel (où le site fonctionne), Fapshi (paiements Mobile Money), Resend (e-mails), Meta (messages WhatsApp) et Google (si vous vous connectez avec Google). Elles n'utilisent vos informations que pour fournir ce service.",
       "Les autorités, lorsque la loi l'exige.",
@@ -127,7 +131,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title={fr ? "Politique de confidentialité" : "Privacy policy"}
-      updated={fr ? "Mise à jour le 13 octobre 2026" : "Last updated 13 October 2026"}
+      updated={fr ? "Mise à jour le 18 octobre 2026" : "Last updated 18 October 2026"}
       intro={fr
         ? "Vos informations servent à faire fonctionner vos transactions et à vous protéger, et à rien d'autre."
         : "Your information is used to run your transactions and keep you safe, and for nothing else."}

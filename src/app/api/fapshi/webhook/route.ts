@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { confirmPayment } from "@/lib/payments";
+import { confirmTopup, TOPUP_PREFIX } from "@/lib/pickup/topups";
 
 /**
  * Fapshi sends one static webhook URL per service (set in the Fapshi
@@ -20,6 +21,13 @@ export async function POST(req: NextRequest) {
 
     if (!tradeId || !transId) {
       console.error("[fapshi-webhook] missing externalId/transId in payload");
+      return NextResponse.json({ ok: true });
+    }
+
+    // A Pickup rider topping up their balance
+    if (String(tradeId).startsWith(TOPUP_PREFIX)) {
+      const { result } = await confirmTopup(String(tradeId), String(transId));
+      console.log("[fapshi-webhook] top-up", tradeId, "->", result);
       return NextResponse.json({ ok: true });
     }
 

@@ -7,6 +7,7 @@ import { cleanPhone as normalizePhone, phoneInUse, PHONE_TAKEN } from "@/lib/use
 import { claimInvitedTrades } from "@/lib/invites";
 import { normalizeLang } from "@/lib/i18n/core";
 import { getLang } from "@/lib/i18n/server";
+import { sendWelcomeEmail } from "@/lib/welcome";
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
       ? phone.replace(/\D/g, "").replace(/^237/, "").replace(/^0/, "")
       : "";
 
+    const userLang = normalizeLang(lang) || getLang();
     await db.collection("users").doc(id).set({
       id,
       email:       email.toLowerCase(),
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
       avatar,
       phone:       cleanPhone,
       // Emails and notifications are sent in this language
-      lang:        normalizeLang(lang) || getLang(),
+      lang:        userLang,
       // From the signup questions: "goods", "services" or "both" (sellers only)
       ...(role === "vendor" && ["goods", "services", "both"].includes(sells) ? { sells } : {}),
       rating:      5.0,
@@ -60,6 +62,9 @@ export async function POST(req: NextRequest) {
 
     // A seller may already have created a transaction for this person
     const claimed = await claimInvitedTrades(db, { id, name, email: email.toLowerCase(), phone: cleanPhone, avatar, role }, invite);
+
+    // Welcome email, in their language (never blocks the signup)
+    await sendWelcomeEmail({ name, email: email.toLowerCase(), role, lang: userLang });
 
     const res = NextResponse.json({ user, success: true, tradeId: claimed[0] || null, waiting: claimed.length });
     res.cookies.set("st_token", token, {

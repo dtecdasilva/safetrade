@@ -122,5 +122,16 @@ export const pages: Record<string, string> = {
   "Confirm new password": "Confirmer le nouveau mot de passe",
   "Set password": "Créer le mot de passe",
   "The new passwords do not match": "Les nouveaux mots de passe ne correspondent pas",
-  "Contents": "Sommaire"
+  "Contents": "Sommaire",
+  "Confirm “{title}”": "Confirmer « {title} »",
+  "{buyer} wants to buy this for {amount}. Check the details and confirm so they can pay.": "{buyer} veut acheter ceci pour {amount}. Vérifiez les détails et confirmez pour qu'il puisse payer.",
+  "You also have 1 active purchase. Switch to Buying to see it.": "Vous avez aussi 1 achat en cours. Passez en mode Achat pour le voir.",
+  "You also have {n} active purchases. Switch to Buying to see them.": "Vous avez aussi {n} achats en cours. Passez en mode Achat pour les voir.",
+  "You also have 1 active sale. Switch to Selling to see it.": "Vous avez aussi 1 vente en cours. Passez en mode Vente pour la voir.",
+  "You also have {n} active sales. Switch to Selling to see them.": "Vous avez aussi {n} ventes en cours. Passez en mode Vente pour les voir.",
+  "Your seller account has been flagged.": "Votre compte vendeur a été signalé.",
+  "After reports from buyers, Zola shows buyers a warning on transactions with you. Contact customer service if you'd like to talk about it.": "Suite à des signalements d'acheteurs, Zola affiche un avertissement aux acheteurs sur les transactions avec vous. Contactez le service client si vous souhaitez en parler.",
+  "Buyers and sellers find you on Zola by this number, so it can only belong to one account.": "Les acheteurs et les vendeurs vous trouvent sur Zola avec ce numéro : il ne peut appartenir qu'à un seul compte.",
+  "Buying and selling": "Achat et vente",
+  "Your account can buy and sell. Switch to see your purchases or your sales. Nothing is lost when you switch.": "Votre compte peut acheter et vendre. Changez de mode pour voir vos achats ou vos ventes. Rien n'est perdu quand vous changez."
 };

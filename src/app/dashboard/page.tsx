@@ -20,5 +20,15 @@ export default async function DashboardPage() {
 
   const activity = await getRecentActivity(trades, 5, 10);
 
-  return <DashboardClient session={session} trades={trades} activity={activity} />;
+  // One account buys and sells: count what is going on on the other side,
+  // so the switch can show it
+  const otherField = field === "vendor_id" ? "buyer_id" : "vendor_id";
+  const [otherSnap, meDoc] = await Promise.all([
+    db.collection("trades").where(otherField, "==", session.id).get(),
+    db.collection("users").doc(session.id).get(),
+  ]);
+  const otherActive = otherSnap.docs.filter(d => !["complete", "cancelled"].includes((d.data() as any).status)).length;
+  const flagged = !!(meDoc.data() as any)?.flagged;
+
+  return <DashboardClient session={session} trades={trades} activity={activity} otherActive={otherActive} flagged={flagged} />;
 }

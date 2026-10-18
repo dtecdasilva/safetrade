@@ -6,8 +6,9 @@ export async function GET() {
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
-    if (session.role !== "vendor")
-      return NextResponse.json({ error: "Seller accounts only" }, { status: 403 });
+    // Any account can sell, so any account can have money to withdraw
+    if (session.role === "admin")
+      return NextResponse.json({ error: "Admin accounts don't have a wallet" }, { status: 403 });
 
     const db = getDb();
 

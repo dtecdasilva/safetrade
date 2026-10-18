@@ -3,6 +3,8 @@ import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { notifyTradeMove } from "@/lib/notifications";
 import { quote } from "@/lib/fees";
+import { canReportSeller, reportId } from "@/lib/reports";
+import { branchSnapshot, deliveryForViewer } from "@/lib/pickup/deliveries";
 
 /** Once the buyer has paid, the agreement is fixed for both sides. */
 const PAID_LOCK = "The buyer has already paid, so this transaction can no longer be changed. If something needs fixing, contact Zola customer service.";
@@ -82,7 +84,41 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       }
     }
 
-    return NextResponse.json({ trade, events, contacts });
+    // Step 4: warn buyers about a seller Zola has flagged, and tell the buyer
+    // whether they have already reported this seller
+    let sellerFlag: any = undefined;
+    let myReport: any = undefined;
+    const isBuyer = trade.buyer_id === session.id;
+    if ((isBuyer || session.role === "admin") && canReportSeller(trade)) {
+      try {
+        const v = (await db.collection("users").doc(trade.vendor_id).get()).data() || {};
+        if (v.flagged) {
+          sellerFlag = session.role === "admin"
+            ? { flagged: true, note: v.flag_note || "", at: v.flagged_at || "", by: v.flagged_by || "" }
+            : { flagged: true };
+        }
+        if (isBuyer) {
+          const r = (await db.collection("reports").doc(reportId(params.id, session.id)).get()).data();
+          if (r) myReport = { reason: r.reason, created_at: r.created_at, status: r.status };
+        }
+      } catch (e: any) {
+        console.error("[trade GET] failed to check the seller:", e.message);
+      }
+    }
+
+    // Step 5: the Pickup delivery, showing each side only what they need
+    let delivery: any = null;
+    if (trade.dest_branch) {
+      try {
+        const d = (await db.collection("deliveries").doc(params.id).get()).data();
+        const viewer = session.role === "admin" ? "admin" : trade.vendor_id === session.id ? "seller" : "buyer";
+        delivery = deliveryForViewer(d, viewer);
+      } catch (e: any) {
+        console.error("[trade GET] failed to fetch the delivery:", e.message);
+      }
+    }
+
+    return NextResponse.json({ trade, events, contacts, sellerFlag, myReport, delivery });
   } catch (e: any) {
     console.error("[trade GET] unexpected error:", e.message, e.stack);
     return NextResponse.json({ error: e.message }, { status: 500 });
@@ -100,14 +136,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!tradeDoc.exists) return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
 
     const trade = tradeDoc.data()!;
-    if (trade.vendor_id !== session.id)
-      return NextResponse.json({ error: "Only the seller can edit this transaction" }, { status: 403 });
-    if (trade.status !== "pending_payment")
-      return NextResponse.json({ error: PAID_LOCK }, { status: 400 });
-    if (paymentInProgress(trade))
-      return NextResponse.json({ error: PAYING_LOCK }, { status: 409 });
+    // A buyer can change a transaction they started until the seller confirms it
+    const buyerEditing = trade.buyer_id === session.id && trade.status === "awaiting_seller";
+    if (!buyerEditing) {
+      if (trade.vendor_id !== session.id)
+        return NextResponse.json({ error: "Only the seller can edit this transaction" }, { status: 403 });
+      if (trade.status === "awaiting_seller")
+        return NextResponse.json({ error: "The buyer started this transaction. Confirm it, or decline it and tell them what to change." }, { status: 400 });
+      if (trade.status !== "pending_payment")
+        return NextResponse.json({ error: PAID_LOCK }, { status: 400 });
+      if (paymentInProgress(trade))
+        return NextResponse.json({ error: PAYING_LOCK }, { status: 409 });
+    }
 
-    const { title, description, amount, deliveryDays, needsDelivery } = await req.json();
+    const { title, description, amount, deliveryDays, needsDelivery, destBranchId } = await req.json();
     if (!title || !description || !amount)
       return NextResponse.json({ error: "Title, description and amount are required" }, { status: 400 });
 
@@ -117,7 +159,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const withDelivery = needsDelivery === undefined ? hadDelivery : needsDelivery !== false;
     const { fee, deliveryFee, total: buyerTotal } = quote(Number(amount), withDelivery);
 
+    // Changing the agency branch (sellers, before payment)
+    const newBranch = withDelivery && destBranchId ? await branchSnapshot(db, destBranchId) : null;
+
     await db.collection("trades").doc(params.id).update({
+      ...(newBranch ? { dest_branch: newBranch } : {}),
+      ...(!withDelivery ? { dest_branch: null } : {}),
       title,
       description,
       amount: Number(amount),
@@ -129,7 +176,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       updated_at: new Date().toISOString(),
     });
 
-    await notifyTradeMove("edited", { ...(trade as any), id: params.id, title, amount: Number(amount), buyer_total: buyerTotal });
+    await notifyTradeMove("edited", { ...(trade as any), id: params.id, title, amount: Number(amount), buyer_total: buyerTotal }, { actorId: session.id });
 
     return NextResponse.json({ success: true });
   } catch (e: any) {
@@ -148,10 +195,19 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     if (!tradeDoc.exists) return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
 
     const trade = tradeDoc.data()!;
-    if (trade.vendor_id !== session.id)
-      return NextResponse.json({ error: "Only the seller can delete this transaction" }, { status: 403 });
-    if (trade.status !== "pending_payment")
-      return NextResponse.json({ error: PAID_LOCK.replace("changed", "deleted") }, { status: 400 });
+    // A buyer who started a transaction can cancel it until they pay
+    const buyerCancelling = trade.buyer_id === session.id && trade.created_by === "buyer";
+    if (buyerCancelling) {
+      if (!["awaiting_seller", "pending_payment"].includes(trade.status))
+        return NextResponse.json({ error: "You've already paid, so this transaction can't be cancelled. If something is wrong, contact Zola customer service." }, { status: 400 });
+    } else {
+      if (trade.vendor_id !== session.id)
+        return NextResponse.json({ error: "Only the seller can delete this transaction" }, { status: 403 });
+      if (trade.status === "awaiting_seller")
+        return NextResponse.json({ error: "The buyer started this transaction. Decline it instead." }, { status: 400 });
+      if (trade.status !== "pending_payment")
+        return NextResponse.json({ error: PAID_LOCK.replace("changed", "deleted") }, { status: 400 });
+    }
     if (paymentInProgress(trade))
       return NextResponse.json({ error: PAYING_LOCK }, { status: 409 });
 
@@ -165,7 +221,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     eventsSnap.docs.forEach(d => batch.delete(d.ref));
     await batch.commit();
 
-    await notifyTradeMove("deleted", { ...(trade as any), id: params.id });
+    await notifyTradeMove("deleted", { ...(trade as any), id: params.id }, { actorId: session.id });
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

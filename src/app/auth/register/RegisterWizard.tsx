@@ -26,7 +26,9 @@ type Sells = "goods" | "services" | "both";
 type Step  = "invite" | "role" | "sells" | "how" | "name" | "phone" | "account" | "done";
 
 interface Invite {
-  title: string; sellerName: string; total: number; amount: number; fee: number; deliveryFee: number;
+  /** "buyer": a seller invited this person to pay. "seller": a buyer invited them to confirm. */
+  side: "buyer" | "seller";
+  title: string; sellerName: string; buyerName: string; total: number; amount: number; fee: number; deliveryFee: number;
   phone: string; email: string;
 }
 
@@ -35,8 +37,8 @@ function pointsFor(role: Role, sells: Sells | "", t: T): { title: string; text: 
   const delivery = money(DELIVERY_FEE);
   if (role === "buyer") {
     return [
-      { title: t("A seller creates a transaction for you"),
-        text: t("They use your phone number, so sign up with the number you gave them.") },
+      { title: t("A transaction is created"),
+        text: t("A seller creates it with your phone number, or you start it yourself with theirs and they confirm it.") },
       { title: t("You pay Zola, not the seller"),
         text: t("You pay the item price, {fee} and {delivery} delivery. You see the full total before you pay.", { fee, delivery }) },
       { title: t("Zola delivers your order"),
@@ -53,8 +55,8 @@ function pointsFor(role: Role, sells: Sells | "", t: T): { title: string; text: 
           text: t("Not straight to the buyer. Zola delivers it, and the buyer pays the {delivery} delivery, not you.", { delivery }) +
                 (sells === "both" ? " " + t("For a service there is nothing to send: you just mark the work as delivered.") : "") };
   return [
-    { title: t("You create a transaction"),
-      text: t("Enter the item, your price and the buyer's phone number. If they aren't on Zola yet, we invite them for you.") },
+    { title: t("A transaction is created"),
+      text: t("Enter the item, your price and the buyer's phone number, or confirm a transaction a buyer sends you. If they aren't on Zola yet, we invite them for you.") },
     { title: t("The buyer pays Zola"),
       text: t("We tell you the moment the money is held. The buyer pays {fee} on top, so you receive your full price.", { fee }) },
     third,
@@ -90,8 +92,8 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
         const d = await res.json().catch(() => ({}));
         if (res.ok && d.claimed) { setInviteNote("This invitation has already been used. If that was you, sign in to see your transaction."); return; }
         if (!res.ok) { setInviteNote(d.error || "This invitation is no longer available. You can still create an account."); return; }
-        setInvite(d);
-        setRole("buyer");
+        setInvite({ ...d, side: d.side === "seller" ? "seller" : "buyer" });
+        setRole(d.side === "seller" ? "vendor" : "buyer");
         setForm((f) => ({ ...f, phone: d.phone || "", email: d.email || "" }));
         setStep("invite");
       })
@@ -114,6 +116,8 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
   useEffect(() => { firstField.current?.focus(); }, [step]);
 
   const firstName = form.name.trim().split(" ")[0];
+  // Who sent the invitation: the seller (inviting a buyer) or the buyer (inviting a seller)
+  const inviter = invite ? (invite.side === "seller" ? invite.buyerName : invite.sellerName) : "";
 
   async function createAccount() {
     setError(""); setLoading(true);
@@ -168,10 +172,18 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
       <AuthShell>
         <span className="auth-badge"><CheckCircle size={24} /></span>
         <h1 className="auth-title">{firstName ? t("You're in, {name}.", { name: firstName }) : t("You're in.")}</h1>
-        {tradeId ? (
+        {tradeId && role === "vendor" ? (
           <>
             <p className="auth-sub">
-              {invite ? t("{seller}'s transaction is waiting for you.", { seller: invite.sellerName }) : t("A seller already created a transaction for you.")}{" "}
+              {invite ? t("{buyer}'s transaction is waiting for you.", { buyer: inviter }) : t("A buyer already started a transaction with you.")}{" "}
+              {t("Check the details, then confirm so the buyer can pay.")}
+            </p>
+            <a href={`/trade/${tradeId}`} className="btn btn-primary btn-lg btn-block">{t("Review and confirm")} <ArrowRight size={17} /></a>
+          </>
+        ) : tradeId ? (
+          <>
+            <p className="auth-sub">
+              {invite ? t("{seller}'s transaction is waiting for you.", { seller: inviter }) : t("A seller already created a transaction for you.")}{" "}
               {t("Review it, then pay Zola when you're ready.")}
             </p>
             <a href={`/trade/${tradeId}`} className="btn btn-primary btn-lg btn-block">{t("Review and pay")} <ArrowRight size={17} /></a>
@@ -185,10 +197,11 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
         ) : (
           <>
             <p className="auth-sub">
-              {t("Your buyer account is ready. Give your seller this number and ask them to create the transaction on Zola:")}{" "}
+              {t("Your account is ready. Start a transaction with your seller's number, or give them yours and ask them to create it on Zola:")}{" "}
               <strong className="num" style={{ color: "var(--navy)", whiteSpace: "nowrap" }}>+237 {form.phone}</strong>
             </p>
-            <a href="/dashboard" className="btn btn-primary btn-lg btn-block">{t("Go to my dashboard")} <ArrowRight size={17} /></a>
+            <a href="/trade/new" className="btn btn-primary btn-lg btn-block">{t("Start a transaction")} <ArrowRight size={17} /></a>
+            <a href="/dashboard" className="btn btn-secondary btn-block" style={{ marginTop: 10 }}>{t("Go to my dashboard")}</a>
           </>
         )}
       </AuthShell>
@@ -219,9 +232,26 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
       <form onSubmit={submitStep} noValidate>
 
         {/* ── Invitation ── */}
-        {step === "invite" && invite && (
+        {step === "invite" && invite && invite.side === "seller" && (
           <>
-            <h1 className="auth-title">{t("{seller} wants you to pay safely with Zola", { seller: invite.sellerName })}</h1>
+            <h1 className="auth-title">{t("{buyer} wants to buy from you with Zola", { buyer: inviter })}</h1>
+            <p className="auth-sub">
+              {t("With Zola the buyer pays us, not you directly. We hold the money and pay you once delivery is confirmed.")}
+            </p>
+            <div className="wiz-summary">
+              <p className="wiz-summary-title">{invite.title}</p>
+              <div className="kv kv-total"><span>{t("You receive")}</span><span>{money(invite.amount)}</span></div>
+            </div>
+            <p className="hint" style={{ margin: "14px 2px 20px", fontSize: 14 }}>
+              {t("Create your account first. It takes about a minute. Then check the details and confirm, and the buyer can pay.")}
+            </p>
+            <button type="submit" className="btn btn-primary btn-lg btn-block">{t("Create my account")} <ArrowRight size={17} /></button>
+          </>
+        )}
+
+        {step === "invite" && invite && invite.side !== "seller" && (
+          <>
+            <h1 className="auth-title">{t("{seller} wants you to pay safely with Zola", { seller: inviter })}</h1>
             <p className="auth-sub">
               {t("With Zola you pay us, not the seller. We hold your money until your order arrives.")}
             </p>
@@ -262,6 +292,7 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
                 </span>
               </button>
             </div>
+            <p className="hint" style={{ marginTop: 14, textAlign: "center" }}>{t("One account does both. You can switch between buying and selling at any time.")}</p>
           </>
         )}
 
@@ -314,7 +345,7 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
           <>
             <h1 className="auth-title">{t("What's your name?")}</h1>
             <p className="auth-sub">
-              {role === "vendor" ? t("Buyers see this on every transaction you create.") : t("Sellers see this when they create a transaction for you.")}
+              {role === "vendor" ? t("Buyers see this on every transaction you create.") : t("Sellers see this on every transaction with you.")}
             </p>
             {error && <div className="notice notice-danger" role="alert" style={{ marginBottom: 14 }}>{t(error)}</div>}
             <div className="field" style={{ marginBottom: 18 }}>
@@ -332,7 +363,9 @@ export default function RegisterWizard({ inviteId = "" }: { inviteId?: string })
             <h1 className="auth-title">{t("What's your WhatsApp number?")}</h1>
             <p className="auth-sub">
               {invite
-                ? t("This is the number {seller} used. Keep it and your transaction will be waiting for you.", { seller: invite.sellerName })
+                ? (invite.side === "seller"
+                    ? t("This is the number {buyer} used. Keep it and the transaction will be waiting for you.", { buyer: inviter })
+                    : t("This is the number {seller} used. Keep it and your transaction will be waiting for you.", { seller: inviter }))
                 : role === "vendor"
                   ? t("We send your payment updates here. Each number can have one Zola account.")
                   : t("Sellers find you on Zola by this number, and we send your updates here. Each number can have one account.")}

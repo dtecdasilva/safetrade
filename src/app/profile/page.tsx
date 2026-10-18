@@ -6,7 +6,8 @@ import { ArrowLeft, CheckCircle, Eye, EyeOff } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { useT } from "@/components/I18n";
 import { PageLoader, PhoneField } from "@/components/ui";
-import { fmtDate, roleLabel } from "@/lib/zola";
+import { fmtDate } from "@/lib/zola";
+import ModeSwitch from "@/components/ModeSwitch";
 
 interface Profile {
   id: string; name: string; email: string; phone: string; role: string;
@@ -90,7 +91,7 @@ export default function ProfilePage() {
         <div style={{ marginBottom: 24 }}>
           <h1 className="page-title">{t("Profile")}</h1>
           <p className="page-sub" suppressHydrationWarning>
-            {t(`${roleLabel(profile.role)} account`)}{profile.created_at ? t(", member since {date}", { date: fmtDate(profile.created_at, lang) }) : ""}
+            {isAdmin ? t("Admin account") : profile.role === "vendor" ? t("Currently selling") : t("Currently buying")}{profile.created_at ? t(", member since {date}", { date: fmtDate(profile.created_at, lang) }) : ""}
           </p>
         </div>
 
@@ -129,9 +130,7 @@ export default function ProfilePage() {
               <PhoneField id="p-phone" value={form.phone} required={!isAdmin}
                 onChange={(v) => { setForm((f) => ({ ...f, phone: v })); setSaved(false); }} />
               <p className="hint">
-                {profile.role === "buyer"
-                  ? t("Sellers use this number to send you transactions, so it can only belong to one account.")
-                  : t("Used for transaction updates. A number can only belong to one account.")}
+                {t("Buyers and sellers find you on Zola by this number, so it can only belong to one account.")}
               </p>
             </div>
 
@@ -147,6 +146,19 @@ export default function ProfilePage() {
               )}
             </div>
           </form>
+
+          {/* Buying and selling */}
+          {!isAdmin && (
+            <section className="card card-pad stack" aria-labelledby="mode-title">
+              <div>
+                <h2 id="mode-title" className="section-title">{t("Buying and selling")}</h2>
+                <p className="hint" style={{ marginTop: 2 }}>
+                  {t("Your account can buy and sell. Switch to see your purchases or your sales. Nothing is lost when you switch.")}
+                </p>
+              </div>
+              <ModeSwitch role={profile.role} />
+            </section>
+          )}
 
           {/* Password */}
           <form onSubmit={savePassword} className="card card-pad stack" aria-labelledby="pw-title">

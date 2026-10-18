@@ -43,6 +43,20 @@ const FAQ: { q: string; a: string[] }[] = [
       "The seller creates the transaction with the item, the price, the delivery time and the buyer's phone number.",
       "If the buyer already has a Zola account with that number, Zola notifies them and they review the details and pay.",
       "If the buyer isn't on Zola yet, the seller adds the buyer's email. Zola invites the buyer by email and WhatsApp to create an account, and the transaction is waiting for them when they do.",
+      "A buyer can start one too: switch to Buying, press New transaction and enter what you agreed and the seller's phone number. Zola sends it to the seller, who checks the details and confirms. Then you pay. If the seller isn't on Zola yet, add their email and we invite them. You can also send them the link on WhatsApp.",
+    ],
+  },
+  {
+    q: "Can I buy and sell with the same account?",
+    a: [
+      "Yes. Every Zola account can buy and sell. Use the Buying and Selling switch on your dashboard, or Switch to selling in the menu at the top. Your purchases and your sales are kept separate, and nothing is lost when you switch.",
+    ],
+  },
+  {
+    q: "How do I report a seller?",
+    a: [
+      "Open the transaction and press Report this seller. You can do it at any time, even after the transaction is completed. Only Zola sees your report: the seller is not told who reported them.",
+      "Zola reviews every report. If other buyers should be careful, Zola flags the seller, and buyers then see a warning on transactions with them.",
     ],
   },
   {
@@ -81,7 +95,7 @@ const FAQ: { q: string; a: string[] }[] = [
   {
     q: "Can a transaction be changed or deleted?",
     a: [
-      "The seller can edit or delete a transaction until the buyer pays. Once the buyer has paid, it is locked and can't be changed, so both sides are working from the same agreement. It is also locked for a few minutes while a payment is in progress.",
+      "The seller can edit or delete a transaction until the buyer pays. A buyer who started a transaction can edit it until the seller confirms, and cancel it until they pay. Once the buyer has paid, it is locked and can't be changed, so both sides are working from the same agreement. It is also locked for a few minutes while a payment is in progress.",
     ],
   },
   {
@@ -124,6 +138,20 @@ const FAQ_FR: { q: string; a: string[] }[] = [
       "Le vendeur crée la transaction avec l'article, le prix, le délai de livraison et le numéro de téléphone de l'acheteur.",
       "Si l'acheteur a déjà un compte Zola avec ce numéro, Zola le prévient : il vérifie les détails et paie.",
       "Si l'acheteur n'est pas encore sur Zola, le vendeur ajoute son e-mail. Zola invite l'acheteur par e-mail et WhatsApp à créer un compte, et la transaction l'attend une fois inscrit.",
+      "Un acheteur peut aussi en lancer une : passez en mode Achat, appuyez sur Nouvelle transaction et indiquez ce que vous avez convenu et le numéro du vendeur. Zola l'envoie au vendeur, qui vérifie les détails et confirme. Ensuite, vous payez. Si le vendeur n'est pas encore sur Zola, ajoutez son e-mail et nous l'invitons. Vous pouvez aussi lui envoyer le lien sur WhatsApp.",
+    ],
+  },
+  {
+    q: "Puis-je acheter et vendre avec le même compte ?",
+    a: [
+      "Oui. Chaque compte Zola peut acheter et vendre. Utilisez le bouton Achat / Vente de votre tableau de bord, ou Passer à la vente dans le menu en haut. Vos achats et vos ventes restent séparés, et rien n'est perdu quand vous changez.",
+    ],
+  },
+  {
+    q: "Comment signaler un vendeur ?",
+    a: [
+      "Ouvrez la transaction et appuyez sur Signaler ce vendeur. Vous pouvez le faire à tout moment, même après la fin de la transaction. Seul Zola voit votre signalement : le vendeur ne sait pas qui l'a signalé.",
+      "Zola examine chaque signalement. Si d'autres acheteurs doivent être prudents, Zola signale le vendeur, et les acheteurs voient alors un avertissement sur les transactions avec lui.",
     ],
   },
   {
@@ -162,7 +190,7 @@ const FAQ_FR: { q: string; a: string[] }[] = [
   {
     q: "Peut-on modifier ou supprimer une transaction ?",
     a: [
-      "Le vendeur peut modifier ou supprimer une transaction jusqu'au paiement de l'acheteur. Une fois payée, elle est verrouillée et ne peut plus changer, pour que chacun s'en tienne au même accord. Elle est aussi verrouillée quelques minutes pendant un paiement en cours.",
+      "Le vendeur peut modifier ou supprimer une transaction jusqu'au paiement de l'acheteur. Un acheteur qui a lancé une transaction peut la modifier jusqu'à la confirmation du vendeur, et l'annuler jusqu'à son paiement. Une fois payée, elle est verrouillée et ne peut plus changer, pour que chacun s'en tienne au même accord. Elle est aussi verrouillée quelques minutes pendant un paiement en cours.",
     ],
   },
   {

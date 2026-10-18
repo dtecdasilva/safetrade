@@ -3,7 +3,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { Search, X, ShieldCheck, CheckCircle, AlertTriangle, Trash2, Edit3, Banknote, Phone, PhoneCall } from "lucide-react";
+import { Search, X, ShieldCheck, CheckCircle, AlertTriangle, Trash2, Edit3, Banknote, Phone, PhoneCall, Flag } from "lucide-react";
+import { reportReasonLabel } from "@/lib/reports";
+import AdminPickup from "@/components/pickup/AdminPickup";
 import { PageLoader, Pill, StatusPill } from "@/components/ui";
 import { WITHDRAWAL_STATUS, brandText, fmtDate, fmtDateTime, money, roleLabel, shortId, statusMeta } from "@/lib/zola";
 import { reviewLabel, reviewState } from "@/lib/review";
@@ -11,7 +13,13 @@ import { reviewLabel, reviewState } from "@/lib/review";
 export default function AdminPage() {
   const router = useRouter();
   const [user, setUser]                     = useState<any>(null);
-  const [tab, setTab]                       = useState<"trades"|"users"|"withdrawals">("trades");
+  const [tab, setTab]                       = useState<"trades"|"users"|"withdrawals"|"reports"|"riders"|"agencies">("trades");
+  const [reports, setReports]               = useState<any[]>([]);
+  const [sellers, setSellers]               = useState<Record<string, any>>({});
+  const [flagFor, setFlagFor]               = useState<{ id: string; name: string } | null>(null);
+  const [flagNote, setFlagNote]             = useState("");
+  const [reviewNote, setReviewNote]         = useState<Record<string, string>>({});
+  const [busy, setBusy]                     = useState<string|null>(null);
   const [trades, setTrades]                 = useState<any[]>([]);
   const [users, setUsers]                   = useState<any[]>([]);
   const [withdrawals, setWithdrawals]       = useState<any[]>([]);
@@ -27,13 +35,35 @@ export default function AdminPage() {
     const me = await (await fetch("/api/auth/me")).json();
     if (!me.user || me.user.role !== "admin") { router.push("/auth/login"); return; }
     setUser(me.user);
-    const [tr, ur, wr] = await Promise.all([fetch("/api/trades"), fetch("/api/admin/users"), fetch("/api/withdrawals")]);
-    const [td, ud, wd] = await Promise.all([tr.json(), ur.json(), wr.json()]);
+    const [tr, ur, wr, rr] = await Promise.all([fetch("/api/trades"), fetch("/api/admin/users"), fetch("/api/withdrawals"), fetch("/api/reports")]);
+    const [td, ud, wd, rd] = await Promise.all([tr.json(), ur.json(), wr.json(), rr.json().catch(() => ({}))]);
     setTrades(td.trades || []); setUsers(ud.users || []); setWithdrawals(wd.withdrawals || []);
+    setReports(rd.reports || []); setSellers(rd.sellers || {});
     setLoading(false);
   }, [router]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Links from emails can open a tab directly: /admin?tab=reports
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("tab");
+    if (want === "reports" || want === "users" || want === "withdrawals" || want === "riders" || want === "agencies") setTab(want);
+  }, []);
+
+  async function setFlag(userId: string, flagged: boolean, note = "") {
+    setBusy(`flag-${userId}`); setActionError("");
+    const res = await fetch(`/api/admin/users/${userId}/flag`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ flagged, note }) });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setActionError(d.error || "That didn't go through. Please try again."); }
+    else { setFlagFor(null); setFlagNote(""); }
+    await load(); setBusy(null);
+  }
+
+  async function reviewReport(id: string, action: "reviewed" | "reopen") {
+    setBusy(`report-${id}`); setActionError("");
+    const res = await fetch(`/api/admin/reports/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, note: reviewNote[id] || "" }) });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setActionError(d.error || "That didn't go through. Please try again."); }
+    await load(); setBusy(null);
+  }
 
   async function release(id: string) {
     setReleaseLoading(id); setActionError("");
@@ -75,13 +105,18 @@ export default function AdminPage() {
   const pendingW        = withdrawals.filter(w => w.status === "pending");
   const processedW      = withdrawals.filter(w => w.status !== "pending");
   // Money actually paid in and not yet released (unpaid transactions aren't held)
-  const totalEscrow     = trades.filter(t => !["complete","cancelled","pending_payment"].includes(t.status)).reduce((s:number,t:any) => s+t.amount, 0);
-  const needsAttention  = pendingRelease.length + pendingW.length + disputed.length > 0;
+  const totalEscrow     = trades.filter(t => !["complete","cancelled","pending_payment","awaiting_seller"].includes(t.status)).reduce((s:number,t:any) => s+t.amount, 0);
+  const openReports     = reports.filter(r => r.status === "open");
+  const flaggedUsers    = users.filter(u => u.flagged);
+  const needsAttention  = pendingRelease.length + pendingW.length + disputed.length + openReports.length > 0;
 
   const TABS = [
     { key: "trades" as const,      label: `Transactions (${trades.length})` },
     { key: "users" as const,       label: `Users (${users.length})` },
     { key: "withdrawals" as const, label: `Withdrawals${pendingW.length > 0 ? ` (${pendingW.length})` : ""}` },
+    { key: "reports" as const,     label: `Reports${openReports.length > 0 ? ` (${openReports.length})` : ""}` },
+    { key: "riders" as const,      label: "Riders" },
+    { key: "agencies" as const,    label: "Agencies" },
   ];
 
   if (loading || !user) return <PageLoader />;
@@ -134,6 +169,15 @@ export default function AdminPage() {
                 </span>
               </div>
             )}
+            {openReports.length > 0 && (
+              <div className="notice notice-danger">
+                <Flag size={16} />
+                <span>
+                  {openReports.length} seller report{openReports.length > 1 ? "s" : ""} to review.{" "}
+                  {tab !== "reports" && <button className="link-btn" style={{ color: "inherit", textDecoration: "underline" }} onClick={() => setTab("reports")}>Review</button>}
+                </span>
+              </div>
+            )}
             {disputed.length > 0 && (
               <div className="notice notice-danger">
                 <AlertTriangle size={16} />
@@ -170,6 +214,106 @@ export default function AdminPage() {
             </button>
           ))}
         </div>
+
+        {/* Flag a seller: buyers then see a warning on every transaction with them */}
+        {flagFor && (
+          <div className="card card-pad card-danger fade-up" role="dialog" aria-labelledby="flag-title" style={{ marginBottom: 16 }}>
+            <h2 id="flag-title" className="section-title">Flag {brandText(flagFor.name)}?</h2>
+            <p className="hint" style={{ margin: "2px 0 12px" }}>
+              Buyers will see a warning on every transaction with this seller: &ldquo;Be careful with this seller. Zola has received reports about them.&rdquo;
+              The seller is told their account was flagged, but not who reported them. You can remove the flag at any time.
+            </p>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label className="label" htmlFor="flag-note">Why? (only admins see this)</label>
+              <input id="flag-note" className="input" maxLength={500} value={flagNote} onChange={e => setFlagNote(e.target.value)}
+                placeholder="For example: 3 buyers say items were fake" />
+            </div>
+            <div className="btn-row">
+              <button onClick={() => setFlag(flagFor.id, true, flagNote)} disabled={busy === `flag-${flagFor.id}`} className="btn btn-danger">
+                <Flag size={16} /> Flag seller
+              </button>
+              <button onClick={() => setFlagFor(null)} className="btn btn-secondary">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── PICKUP: riders and agency branches ── */}
+        {(tab === "riders" || tab === "agencies") && <AdminPickup tab={tab} />}
+
+        {/* ── REPORTS ── */}
+        {tab === "reports" && (
+          <div className="fade-up">
+            {flaggedUsers.length > 0 && (
+              <p className="hint" style={{ marginBottom: 12 }}>
+                Flagged now: {flaggedUsers.map(u => brandText(u.name)).join(", ")}.
+              </p>
+            )}
+            {reports.length === 0 ? (
+              <div className="card empty">
+                <p className="empty-title">No reports</p>
+                <p className="empty-text">When a buyer reports a seller, it shows up here.</p>
+              </div>
+            ) : (
+              <div className="stack" style={{ gap: 12 }}>
+                {reports.map(r => {
+                  const seller = sellers[r.vendor_id] || {};
+                  return (
+                    <div key={r.id} className={`card card-pad${r.status === "open" ? " card-wait" : ""}`}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: 15.5, fontWeight: 700, color: "var(--navy)" }}>
+                            {brandText(r.vendor_name)}
+                            {seller.flagged && <span className="tag tag-flag" style={{ marginLeft: 8 }}><Flag size={11} style={{ marginRight: 4 }} />Flagged</span>}
+                          </p>
+                          <p className="hint">
+                            Reported by {r.reporter_name} on <Link href={`/trade/${r.trade_id}`}>{r.trade_title}</Link>, {fmtDateTime(r.created_at)}.
+                            {seller.reports > 1 ? ` ${seller.reports} reports about this seller in total.` : ""}
+                          </p>
+                        </div>
+                        <Pill tone={r.status === "open" ? "wait" : "ok"}>{r.status === "open" ? "To review" : "Reviewed"}</Pill>
+                      </div>
+                      <p style={{ fontSize: 14, fontWeight: 600, color: "var(--navy)", marginTop: 12 }}>{reportReasonLabel(r.reason)}</p>
+                      <p className="said">{r.details}</p>
+                      {r.status !== "open" && (
+                        <p className="hint" style={{ marginTop: 8 }}>
+                          Reviewed{r.reviewed_by ? ` by ${r.reviewed_by}` : ""}{r.reviewed_at ? ` on ${fmtDateTime(r.reviewed_at)}` : ""}.{r.review_note ? ` Note: ${r.review_note}` : ""}
+                        </p>
+                      )}
+                      <hr className="divider" />
+                      {r.status === "open" && (
+                        <div className="field" style={{ marginBottom: 10 }}>
+                          <label className="label" htmlFor={`rn-${r.id}`}>What did you find? (optional, only admins see this)</label>
+                          <input id={`rn-${r.id}`} className="input" maxLength={500} value={reviewNote[r.id] || ""}
+                            onChange={e => setReviewNote(n => ({ ...n, [r.id]: e.target.value }))}
+                            placeholder="For example: called both sides, seller refunded" />
+                        </div>
+                      )}
+                      <div className="btn-row">
+                        {r.status === "open" ? (
+                          <button onClick={() => reviewReport(r.id, "reviewed")} disabled={busy === `report-${r.id}`} className="btn btn-primary btn-sm">
+                            <CheckCircle size={15} /> Mark as reviewed
+                          </button>
+                        ) : (
+                          <button onClick={() => reviewReport(r.id, "reopen")} disabled={busy === `report-${r.id}`} className="btn btn-secondary btn-sm">Open again</button>
+                        )}
+                        {seller.flagged ? (
+                          <button onClick={() => setFlag(r.vendor_id, false)} disabled={busy === `flag-${r.vendor_id}`} className="btn btn-secondary btn-sm">
+                            <Flag size={15} /> Remove flag
+                          </button>
+                        ) : (
+                          <button onClick={() => { setFlagFor({ id: r.vendor_id, name: r.vendor_name }); setFlagNote(""); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="btn btn-danger-outline btn-sm">
+                            <Flag size={15} /> Flag seller
+                          </button>
+                        )}
+                        <Link href={`/trade/${r.trade_id}`} className="btn btn-secondary btn-sm">Open transaction</Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── TRANSACTIONS ── */}
         {tab === "trades" && (
@@ -268,7 +412,10 @@ export default function AdminPage() {
                 <tbody>
                   {filteredUsers.map(u => (
                     <tr key={u.id}>
-                      <td className="strong">{brandText(u.name)}</td>
+                      <td className="strong">
+                        {brandText(u.name)}
+                        {u.flagged && <span className="tag tag-flag" style={{ marginLeft: 8 }}><Flag size={11} style={{ marginRight: 4 }} />Flagged</span>}
+                      </td>
                       <td>{u.email}</td>
                       <td><span className={`tag${u.role === "admin" ? " tag-you" : ""}`}>{roleLabel(u.role)}</span></td>
                       <td className="num">{u.trade_count ?? 0}</td>
@@ -278,6 +425,15 @@ export default function AdminPage() {
                           <button onClick={() => setEditUser(u)} className="btn btn-secondary btn-sm">
                             <Edit3 size={14} /> Edit
                           </button>
+                          {u.role !== "admin" && (u.flagged ? (
+                            <button onClick={() => setFlag(u.id, false)} disabled={busy === `flag-${u.id}`} className="btn btn-secondary btn-sm">
+                              <Flag size={14} /> Remove flag
+                            </button>
+                          ) : (
+                            <button onClick={() => { setFlagFor({ id: u.id, name: u.name }); setFlagNote(""); }} className="btn btn-secondary btn-sm">
+                              <Flag size={14} /> Flag
+                            </button>
+                          ))}
                           {u.role !== "admin" && (
                             <button onClick={() => deleteUser(u.id)} className="btn btn-danger-outline btn-sm">
                               <Trash2 size={14} /> Delete

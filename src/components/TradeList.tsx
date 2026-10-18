@@ -103,7 +103,7 @@ export default function TradeList({
               <p className="empty-title">{t("No transactions yet")}</p>
               <p className="empty-text">
                 {role === "buyer"
-                  ? t("When a seller creates a transaction for your number, it will appear here.")
+                  ? t("Start a transaction with your seller's number, or wait for a seller to create one for you. It will appear here.")
                   : t("Create a transaction and Zola will notify the buyer.")}
               </p>
             </>

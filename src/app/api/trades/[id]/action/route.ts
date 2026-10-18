@@ -3,8 +3,10 @@ import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { notifyTradeMove } from "@/lib/notifications";
+import { startDelivery, markSent, branchSnapshot } from "@/lib/pickup/deliveries";
 import { COMPLAINT_MAX, COMPLAINT_MIN, REVIEW_HOURS, reviewEnd, reviewState } from "@/lib/review";
 import {
+  notifyBuyerTradeCreated,
   notifyVendorPaymentReceived,
   notifyBuyerItemShipped,
   notifyVendorDeliveryConfirmed,
@@ -16,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
 
-    const { action, trackingNumber, reason } = await req.json();
+    const { action, trackingNumber, reason, destBranchId } = await req.json();
     const db = getDb();
 
     const tradeDoc = await db.collection("trades").doc(params.id).get();
@@ -46,6 +48,43 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const vendor = vendorDoc.data() || {};
 
     switch (action) {
+      // A buyer started this transaction: the seller checks the details and confirms
+      case "accept": {
+        if (session.id !== trade.vendor_id)
+          return NextResponse.json({ error: "Only the seller can confirm this transaction" }, { status: 403 });
+        if (trade.status !== "awaiting_seller")
+          return NextResponse.json({ error: "This transaction isn't waiting for your confirmation" }, { status: 400 });
+        // Goods: the seller says which agency branch they will send it to
+        const goodsToSend = trade.needs_delivery !== false;
+        const branch = goodsToSend ? await branchSnapshot(db, destBranchId) : null;
+        if (goodsToSend && !branch && (await db.collection("agency_branches").where("active", "==", true).limit(1).get()).size > 0)
+          return NextResponse.json({ error: "Choose the agency branch you will send it to" }, { status: 400 });
+        await updateTrade({ status: "pending_payment", seller_confirmed_at: new Date().toISOString(), ...(branch ? { dest_branch: branch } : {}) });
+        await addEvent("Seller confirmed", `${session.name} confirmed the details. The buyer can now pay.`, "success");
+        await notifyTradeMove("accepted", { ...(trade as any), id: params.id });
+        // The approved "trade created" WhatsApp template fits: it asks the buyer to pay
+        if (buyer.phone) {
+          notifyBuyerTradeCreated({
+            buyerPhone: buyer.phone, buyerName: trade.buyer_name,
+            vendorName: trade.vendor_name, title: trade.title,
+            amount: Number(trade.buyer_total || trade.amount), tradeId: params.id,
+          }).catch(console.error);
+        }
+        break;
+      }
+
+      case "decline": {
+        if (session.id !== trade.vendor_id)
+          return NextResponse.json({ error: "Only the seller can decline this transaction" }, { status: 403 });
+        if (trade.status !== "awaiting_seller")
+          return NextResponse.json({ error: "This transaction isn't waiting for your confirmation" }, { status: 400 });
+        const why = String(reason || "").replace(/\s+/g, " ").trim().slice(0, 500);
+        await updateTrade({ status: "cancelled", declined_at: new Date().toISOString(), declined_reason: why });
+        await addEvent("Seller declined", why ? `${session.name} declined this transaction: “${why}”` : `${session.name} declined this transaction.`, "warn");
+        await notifyTradeMove("declined", { ...(trade as any), id: params.id, declined_reason: why });
+        break;
+      }
+
       case "pay": {
         if (session.id !== trade.buyer_id)
           return NextResponse.json({ error: "Only the buyer can pay" }, { status: 403 });
@@ -62,6 +101,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         await updateTrade({ status: "funds_held", delivery_deadline: deadline.toISOString() });
         await addEvent("Payment confirmed", `FCFA ${trade.amount.toLocaleString()} safely held by Zola`, "success");
         await notifyTradeMove("paid", { ...(trade as any), id: params.id });
+        await startDelivery(params.id);
         // Notify vendor
         if (vendor.phone) {
           notifyVendorPaymentReceived({
@@ -78,13 +118,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           return NextResponse.json({ error: "Only the seller can mark this as shipped" }, { status: 403 });
         if (trade.status !== "funds_held")
           return NextResponse.json({ error: "The buyer hasn't paid yet" }, { status: 400 });
-        await updateTrade({ status: "shipped", tracking_number: trackingNumber || "" });
         const goods = trade.needs_delivery !== undefined ? trade.needs_delivery !== false : Number(trade.delivery_fee) > 0;
-        await addEvent(
-          goods ? "Item sent to Zola" : "Marked as delivered",
-          goods ? "The seller handed the item to Zola for delivery to the buyer" : "The seller marked the work as delivered",
-          "info"
-        );
+
+        // Sent through a bus agency to a Pickup rider: the rider must be known first,
+        // and the agency receipt number is needed so the rider can collect it
+        const delivery = goods && trade.dest_branch ? (await db.collection("deliveries").doc(params.id).get()).data() : null;
+        const receipt = String(trackingNumber || "").trim().slice(0, 60);
+        if (delivery) {
+          if (delivery.status === "waiting_rider")
+            return NextResponse.json({ error: "Wait until a rider is assigned: you need their name to write on the parcel." }, { status: 400 });
+          if (receipt.length < 3)
+            return NextResponse.json({ error: "Enter the receipt number the agency gave you" }, { status: 400 });
+        }
+
+        await updateTrade({ status: "shipped", tracking_number: receipt });
+        if (delivery) {
+          await markSent(db, params.id, receipt);
+          await addEvent("Sent through the agency", `The seller sent the parcel through ${delivery.branch.agency} to ${delivery.rider_name}. Receipt: ${receipt}`, "info");
+        } else {
+          await addEvent(
+            goods ? "Item sent to Zola" : "Marked as delivered",
+            goods ? "The seller handed the item to Zola for delivery to the buyer" : "The seller marked the work as delivered",
+            "info"
+          );
+        }
         await notifyTradeMove("shipped", { ...(trade as any), id: params.id });
         // Notify buyer
         if (buyer.phone) {

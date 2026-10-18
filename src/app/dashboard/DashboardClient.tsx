@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Banknote, ChevronDown, ChevronUp, CheckCircle, Clock, Truck, PackageCheck, ChevronRight } from "lucide-react";
+import { Plus, Banknote, ChevronDown, ChevronUp, CheckCircle, Clock, Truck, PackageCheck, ChevronRight, ClipboardCheck, AlertTriangle, ArrowLeftRight } from "lucide-react";
+import ModeSwitch from "@/components/ModeSwitch";
+import { SupportButtons } from "@/components/Support";
 import Navbar from "@/components/Navbar";
 import TxRow from "@/components/TxRow";
 import { ZolaMark } from "@/components/Logo";
@@ -12,7 +14,7 @@ import { useT } from "@/components/I18n";
 
 const NETWORKS = ["MTN Mobile Money", "Orange Money"];
 
-export default function DashboardClient({ session, trades, activity = [] }: { session: any; trades: any[]; activity?: ActivityItem[] }) {
+export default function DashboardClient({ session, trades, activity = [], otherActive = 0, flagged = false }: { session: any; trades: any[]; activity?: ActivityItem[]; otherActive?: number; flagged?: boolean }) {
   const { t: tr, lang } = useT();
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [showW, setShowW]             = useState(false);
@@ -31,7 +33,7 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
 
   const active    = trades.filter(t => !["complete","cancelled"].includes(t.status));
   const completed = trades.filter(t => t.status === "complete");
-  const held      = active.filter(t => t.status !== "pending_payment");
+  const held      = active.filter(t => !["pending_payment", "awaiting_seller"].includes(t.status));
   const escrow    = held.reduce((s,t) => s + t.amount, 0);
   const released  = isVendor ? completed.reduce((s:number,t:any) => s + t.amount, 0) : 0;
   const pending   = active.filter(t => t.status === "pending_release").length;
@@ -41,14 +43,22 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
   const unpaidTotal = unpaid.reduce((s,t) => s + Number(t.buyer_total || t.amount), 0);
 
   // What this person needs to do next
+  const toConfirm = active.filter(t => t.status === "awaiting_seller");
   const todos = isVendor
-    ? active.filter(t => t.status === "funds_held").map(t => ({
+    ? [
+      ...toConfirm.map(t => ({
+        id: t.id, icon: <ClipboardCheck size={17} />, cta: tr("Review"),
+        title: tr("Confirm “{title}”", { title: t.title }),
+        text: tr("{buyer} wants to buy this for {amount}. Check the details and confirm so they can pay.", { buyer: t.buyer_name, amount: money(t.amount) }),
+      })),
+      ...active.filter(t => t.status === "funds_held").map(t => ({
         id: t.id, icon: <Truck size={17} />, cta: tr("Open"),
         title: tr("Deliver “{title}”", { title: t.title }),
         text: t.needs_delivery === false
           ? tr("Payment has been secured. Complete the work to receive your funds.")
           : tr("Payment has been secured. Send the item to Zola to receive your funds."),
-      }))
+      })),
+    ]
     : [
         ...unpaid.map(t => ({
           id: t.id, icon: <Banknote size={17} />, cta: tr("Pay securely"),
@@ -91,17 +101,42 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
               {isVendor ? tr("Here's where your sales and payments stand.") : tr("Here's where your purchases and payments stand.")}
             </p>
           </div>
-          {isVendor && (
-            <div className="dash-actions">
-              <Link href="/trade/new" className="btn btn-primary">
-                <Plus size={17} /> {tr("New transaction")}
-              </Link>
+          <div className="dash-actions">
+            <ModeSwitch role={session.role} otherCount={otherActive} />
+            <Link href="/trade/new" className="btn btn-primary">
+              <Plus size={17} /> {tr("New transaction")}
+            </Link>
+            {isVendor && (
               <button onClick={() => { setShowW(o => !o); setWError(""); }} className="btn btn-secondary" aria-expanded={showW}>
                 <Banknote size={17} /> {tr("Withdraw")}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
+
+        {/* There is something going on on the other side of this account */}
+        {otherActive > 0 && (
+          <div className="notice notice-info" style={{ marginBottom: 16 }}>
+            <ArrowLeftRight size={16} />
+            <span>
+              {isVendor
+                ? (otherActive === 1 ? tr("You also have 1 active purchase. Switch to Buying to see it.") : tr("You also have {n} active purchases. Switch to Buying to see them.", { n: otherActive }))
+                : (otherActive === 1 ? tr("You also have 1 active sale. Switch to Selling to see it.") : tr("You also have {n} active sales. Switch to Selling to see them.", { n: otherActive }))}
+            </span>
+          </div>
+        )}
+
+        {/* Zola flagged this seller after reports from buyers */}
+        {isVendor && flagged && (
+          <div className="notice notice-danger" role="status" style={{ marginBottom: 16, flexWrap: "wrap" }}>
+            <AlertTriangle size={16} />
+            <span style={{ flex: "1 1 260px" }}>
+              <strong>{tr("Your seller account has been flagged.")}</strong>{" "}
+              {tr("After reports from buyers, Zola shows buyers a warning on transactions with you. Contact customer service if you'd like to talk about it.")}
+            </span>
+            <SupportButtons small />
+          </div>
+        )}
 
         {/* Success message */}
         {wSuccess && (
@@ -260,13 +295,11 @@ export default function DashboardClient({ session, trades, activity = [] }: { se
                   <p className="empty-text">
                     {isVendor
                       ? tr("Create a transaction and Zola will notify the buyer to pay.")
-                      : tr("When a seller creates a transaction for your number, it will appear here.")}
+                      : tr("Start a transaction with your seller's number, or wait for a seller to create one for you. It will appear here.")}
                   </p>
-                  {isVendor && (
-                    <Link href="/trade/new" className="btn btn-primary" style={{ marginTop: 18 }}>
-                      <Plus size={17} /> {tr("New transaction")}
-                    </Link>
-                  )}
+                  <Link href="/trade/new" className="btn btn-primary" style={{ marginTop: 18 }}>
+                    <Plus size={17} /> {tr("New transaction")}
+                  </Link>
                 </div>
               )}
             </section>

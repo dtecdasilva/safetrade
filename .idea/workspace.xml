@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="a88653fd-a5ee-44f6-a9a4-66b36378fa30" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/src/app/admin/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/admin/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/auth/google/complete/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/auth/google/complete/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/auth/register/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/auth/register/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/fapshi/webhook/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/fapshi/webhook/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/invite/[id]/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/invite/[id]/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/profile/lang/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/profile/lang/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/trades/[id]/action/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/trades/[id]/action/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/trades/[id]/notify/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/trades/[id]/notify/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/trades/[id]/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/trades/[id]/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/trades/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/trades/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/withdrawals/balance/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/withdrawals/balance/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/api/withdrawals/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/api/withdrawals/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/auth/login/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/auth/login/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/auth/register/RegisterWizard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/auth/register/RegisterWizard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/dashboard/DashboardClient.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/dashboard/DashboardClient.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/dashboard/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/dashboard/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/globals.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/globals.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/help/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/help/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/layout.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/layout.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/privacy/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/privacy/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/profile/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/profile/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/terms/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/terms/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/trade/[id]/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/trade/[id]/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/trade/new/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/trade/new/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/transactions/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/transactions/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/withdraw/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/withdraw/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/Navbar.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/Navbar.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/TradeList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/TradeList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/i18n/events.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/i18n/events.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/i18n/fr/auth.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/i18n/fr/auth.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/i18n/fr/common.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/i18n/fr/common.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/i18n/fr/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/i18n/fr/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/i18n/fr/messages.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/i18n/fr/messages.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/i18n/fr/pages.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/i18n/fr/pages.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/i18n/fr/trade.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/i18n/fr/trade.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/invites.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/invites.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/notifications.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/notifications.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/payments.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/payments.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/summary.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/summary.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/zola.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/zola.ts" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectId" id="3Ks55znetqCCD2OwSv4WXXBzeF1" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "nodejs_package_manager_path": "npm"
+  }
+}]]></component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="a88653fd-a5ee-44f6-a9a4-66b36378fa30" name="Changes" comment="" />
+      <created>1792333280402</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1792333280402</updated>
+      <workItem from="1792333280404" duration="9000" />
+    </task>
+    <servers />
+  </component>
+</project>

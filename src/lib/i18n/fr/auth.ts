@@ -136,5 +136,19 @@ export const auth: Record<string, string> = {
   "Sellers use this number to send you transactions. We also use it for updates.": "Les vendeurs utilisent ce numéro pour vous envoyer des transactions. Nous l'utilisons aussi pour vous tenir informé.",
   "We use this for transaction updates.": "Nous l'utilisons pour vous tenir informé de vos transactions.",
   "Not you?": "Ce n'est pas vous ?",
-  "Use a different account": "Utiliser un autre compte"
+  "Use a different account": "Utiliser un autre compte",
+  "A transaction is created": "Une transaction est créée",
+  "A seller creates it with your phone number, or you start it yourself with theirs and they confirm it.": "Un vendeur la crée avec votre numéro, ou vous la lancez vous-même avec le sien et il la confirme.",
+  "Enter the item, your price and the buyer's phone number, or confirm a transaction a buyer sends you. If they aren't on Zola yet, we invite them for you.": "Indiquez l'article, votre prix et le numéro de l'acheteur, ou confirmez une transaction qu'un acheteur vous envoie. S'il n'est pas encore sur Zola, nous l'invitons pour vous.",
+  "{buyer}'s transaction is waiting for you.": "La transaction de {buyer} vous attend.",
+  "A buyer already started a transaction with you.": "Un acheteur a déjà lancé une transaction avec vous.",
+  "Check the details, then confirm so the buyer can pay.": "Vérifiez les détails, puis confirmez pour que l'acheteur puisse payer.",
+  "Review and confirm": "Vérifier et confirmer",
+  "Your account is ready. Start a transaction with your seller's number, or give them yours and ask them to create it on Zola:": "Votre compte est prêt. Lancez une transaction avec le numéro de votre vendeur, ou donnez-lui le vôtre et demandez-lui de la créer sur Zola :",
+  "{buyer} wants to buy from you with Zola": "{buyer} veut vous acheter quelque chose avec Zola",
+  "With Zola the buyer pays us, not you directly. We hold the money and pay you once delivery is confirmed.": "Avec Zola, l'acheteur nous paie, pas vous directement. Nous gardons l'argent et vous le versons dès que la livraison est confirmée.",
+  "Create your account first. It takes about a minute. Then check the details and confirm, and the buyer can pay.": "Créez d'abord votre compte, cela prend environ une minute. Vérifiez ensuite les détails et confirmez : l'acheteur pourra payer.",
+  "One account does both. You can switch between buying and selling at any time.": "Un seul compte pour les deux. Vous pouvez passer de l'achat à la vente à tout moment.",
+  "Sellers see this on every transaction with you.": "Les vendeurs le voient sur chaque transaction avec vous.",
+  "This is the number {buyer} used. Keep it and the transaction will be waiting for you.": "C'est le numéro utilisé par {buyer}. Gardez-le et la transaction vous attendra."
 };

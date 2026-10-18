@@ -7,6 +7,11 @@ import { Lang, translate } from "@/lib/i18n/core";
 import { brandText } from "@/lib/zola";
 
 const RULES: [RegExp, string][] = [
+  [/^(.+) \(Pickup\) will collect the parcel at (.+), (.+) branch, (.+)\.$/, "$1 (Pickup) récupérera le colis chez $2, agence de $3, $4."],
+  [/^The seller sent the parcel through (.+) to (.+)\. Receipt: (.+)$/, "Le vendeur a envoyé le colis par $1 à $2. Reçu : $3"],
+  [/^(.+) collected the parcel at (.+) and is bringing it to the buyer\.$/, "$1 a récupéré le colis chez $2 et l'apporte à l'acheteur."],
+  [/^(.+) handed the parcel to the buyer, who gave the delivery code\.$/, "$1 a remis le colis à l'acheteur, qui a donné le code de livraison."],
+  [/^Reminder sent to (.+) to confirm the details$/, "Rappel envoyé à $1 pour confirmer les détails"],
   [/^(.+) created this transaction for a buyer who is not on Zola yet$/, "$1 a créé cette transaction pour un acheteur qui n'est pas encore sur Zola"],
   [/^(.+) created this transaction for (.+)$/, "$1 a créé cette transaction pour $2"],
   [/^Notification sent to (.+)$/, "Notification envoyée à $1"],
@@ -29,6 +34,14 @@ const RULES: [RegExp, string][] = [
   [/^Invitation to sign up and pay sent on WhatsApp to (.+)\.$/, "Invitation à s'inscrire et à payer envoyée sur WhatsApp au $1."],
   [/^Neither the email nor the WhatsApp message went through\. Share this link with the buyer yourself: (.+)$/, "Ni l'e-mail ni le message WhatsApp ne sont partis. Envoyez vous-même ce lien à l'acheteur : $1"],
   [/^(.+) created an account and can now pay for this transaction\.$/, "$1 a créé un compte et peut maintenant payer cette transaction."],
+  [/^(.+) created an account and can now confirm this transaction\.$/, "$1 a créé un compte et peut maintenant confirmer cette transaction."],
+  [/^(.+) started this transaction with a seller who is not on Zola yet\. The seller confirms the details, then the buyer pays\.$/, "$1 a lancé cette transaction avec un vendeur qui n'est pas encore sur Zola. Le vendeur confirme les détails, puis l'acheteur paie."],
+  [/^(.+) started this transaction with (.+)\. The seller confirms the details, then the buyer pays\.$/, "$1 a lancé cette transaction avec $2. Le vendeur confirme les détails, puis l'acheteur paie."],
+  [/^(.+) confirmed the details\. The buyer can now pay\.$/, "$1 a confirmé les détails. L'acheteur peut maintenant payer."],
+  [/^(.+) declined this transaction: “(.+)”$/, "$1 a refusé cette transaction : « $2 »"],
+  [/^(.+) declined this transaction\.$/, "$1 a refusé cette transaction."],
+  [/^Invitation to sign up and confirm sent by email to (.+)\.$/, "Invitation à s'inscrire et à confirmer envoyée par e-mail à $1."],
+  [/^The email to the seller didn't go through\. Send them the link yourself: (.+)$/, "L'e-mail au vendeur n'est pas parti. Envoyez-lui vous-même le lien : $1"],
 ];
 
 export function translateEventText(lang: Lang, text: string | undefined | null): string {

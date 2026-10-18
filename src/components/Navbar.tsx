@@ -7,8 +7,9 @@ import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "@/components/NotificationBell";
 import LangSwitch from "@/components/LangSwitch";
+import ModeSwitch from "@/components/ModeSwitch";
 import { useT } from "@/components/I18n";
-import { brandText, initials as toInitials, roleLabel } from "@/lib/zola";
+import { brandText, initials as toInitials } from "@/lib/zola";
 
 interface NavbarProps {
   user: { name: string; role: string; avatar?: string };
@@ -48,6 +49,8 @@ export default function Navbar({ user }: NavbarProps) {
   const isVendor = user.role === "vendor";
   const isAdmin  = user.role === "admin";
   const home     = isAdmin ? "/admin" : "/dashboard";
+  // One account buys and sells; this is the side being used right now
+  const sideLabel = isAdmin ? t("Admin account") : isVendor ? t("Currently selling") : t("Currently buying");
 
   const navLinks = isAdmin
     ? [
@@ -85,7 +88,7 @@ export default function Navbar({ user }: NavbarProps) {
         </div>
 
         <div className="nav-right">
-          {isVendor && (
+          {!isAdmin && (
             <Link href="/trade/new" className="btn btn-primary btn-sm nav-cta">
               <Plus size={16} /> {t("New transaction")}
             </Link>
@@ -107,11 +110,12 @@ export default function Navbar({ user }: NavbarProps) {
               <div className="nav-menu" role="menu">
                 <div className="nav-menu-head">
                   <p style={{ fontSize: 14.5, fontWeight: 700, color: "var(--navy)", lineHeight: 1.3 }}>{name}</p>
-                  <p style={{ fontSize: 13, color: "var(--ink-3)" }}>{t(`${roleLabel(user.role)} account`)}</p>
+                  <p style={{ fontSize: 13, color: "var(--ink-3)" }}>{sideLabel}</p>
                 </div>
                 <Link href="/profile" className="nav-menu-item" role="menuitem" onClick={() => setMenuOpen(false)}>
                   <User size={16} /> {t("Profile")}
                 </Link>
+                {!isAdmin && <ModeSwitch role={user.role} variant="menu" />}
                 <Link href="/help" className="nav-menu-item" role="menuitem" onClick={() => setMenuOpen(false)}>
                   <HelpCircle size={16} /> {t("Help")}
                 </Link>
@@ -136,7 +140,7 @@ export default function Navbar({ user }: NavbarProps) {
             <span className="avatar">{initials}</span>
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 15, fontWeight: 700, color: "var(--navy)", lineHeight: 1.3 }}>{name}</p>
-              <p style={{ fontSize: 13, color: "var(--ink-3)" }}>{t(`${roleLabel(user.role)} account`)}</p>
+              <p style={{ fontSize: 13, color: "var(--ink-3)" }}>{sideLabel}</p>
             </div>
           </div>
           {navLinks.map((l) => (
@@ -148,8 +152,9 @@ export default function Navbar({ user }: NavbarProps) {
           <Link href="/profile" onClick={() => setOpen(false)} className={`nav-link${isActive("/profile") ? " active" : ""}`}>
             <User size={17} /> {t("Profile")}
           </Link>
+          {!isAdmin && <ModeSwitch role={user.role} variant="row" />}
           <LangSwitch variant="row" />
-          {isVendor && (
+          {!isAdmin && (
             <Link href="/trade/new" onClick={() => setOpen(false)} className="btn btn-primary" style={{ marginTop: 10 }}>
               <Plus size={17} /> {t("New transaction")}
             </Link>

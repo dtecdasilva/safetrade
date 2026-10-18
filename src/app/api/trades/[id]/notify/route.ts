@@ -3,7 +3,8 @@ import { randomUUID } from "crypto";
 import { getDb, initDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { sendEmail, emailLayout } from "@/lib/mail";
-import { INVITE_RESEND_MINUTES, inviteSummary, sendBuyerInvite } from "@/lib/invites";
+import { INVITE_RESEND_MINUTES, inviteSummary, sendBuyerInvite, sendSellerInvite, sellerInviteSummary } from "@/lib/invites";
+import { notifySellerReminder } from "@/lib/notifications";
 import { siteUrl } from "@/lib/support";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -17,7 +18,38 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!tradeDoc.exists) return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
 
     const trade = tradeDoc.data()!;
-    if (session.role !== "vendor" || session.id !== trade.vendor_id)
+
+    // A buyer waiting for the seller to confirm a transaction they started
+    if (trade.status === "awaiting_seller") {
+      if (session.id !== trade.buyer_id)
+        return NextResponse.json({ error: "Only the buyer who started this transaction can send reminders" }, { status: 403 });
+      const last = Date.parse(trade.vendor_invited_at || trade.seller_reminded_at || "") || 0;
+      if (Date.now() - last < INVITE_RESEND_MINUTES * 60000)
+        return NextResponse.json({ error: `A message was sent a moment ago. You can send another in ${INVITE_RESEND_MINUTES} minutes.` }, { status: 429 });
+      const now = new Date().toISOString();
+
+      if (trade.vendor_pending) {
+        const buyer  = (await db.collection("users").doc(trade.buyer_id).get()).data();
+        const result = await sendSellerInvite({ ...trade, id: params.id }, buyer?.lang === "fr" ? "fr" : "en");
+        await db.collection("trades").doc(params.id).update({ vendor_invited_at: now, updated_at: now, vendor_invite_sent: { email: result.email } });
+        const summary = sellerInviteSummary({ ...trade, id: params.id }, result);
+        const evId = randomUUID();
+        await db.collection("trade_events").doc(evId).set({
+          id: evId, trade_id: params.id, ...summary, label: result.email ? "Invitation sent again" : summary.label, created_at: now,
+        });
+        return NextResponse.json({ success: true, invited: true, emailSent: result.email, whatsappSent: false });
+      }
+
+      await notifySellerReminder({ ...(trade as any), id: params.id });
+      await db.collection("trades").doc(params.id).update({ seller_reminded_at: now, updated_at: now });
+      const evId = randomUUID();
+      await db.collection("trade_events").doc(evId).set({
+        id: evId, trade_id: params.id, label: "Reminder sent", detail: `Reminder sent to ${trade.vendor_name} to confirm the details`, type: "success", created_at: now,
+      });
+      return NextResponse.json({ success: true, emailSent: true });
+    }
+
+    if (session.id !== trade.vendor_id)
       return NextResponse.json({ error: "Only the seller who created this transaction can send reminders" }, { status: 403 });
 
     if (trade.status !== "pending_payment")

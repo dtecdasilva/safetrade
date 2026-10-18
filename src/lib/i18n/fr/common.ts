@@ -140,5 +140,21 @@ export const common: Record<string, string> = {
   "Something still wrong?": "Encore un souci ?",
   "Stuck on a payment, a delivery or your account? Message us on WhatsApp or give us a call. Have your transaction ID ready if it's about a transaction.": "Un souci de paiement, de livraison ou de compte ? Écrivez-nous sur WhatsApp ou appelez-nous. S'il s'agit d'une transaction, ayez son ID sous la main.",
   "No phone number on this account": "Aucun numéro sur ce compte",
-  "Continue with Google": "Continuer avec Google"
+  "Continue with Google": "Continuer avec Google",
+  "{n} active": "{n} en cours",
+  "Switching...": "Changement...",
+  "Switch to buying": "Passer à l'achat",
+  "Switch to selling": "Passer à la vente",
+  "Buying or selling": "Achat ou vente",
+  "Buying": "Achat",
+  "Selling": "Vente",
+  "Currently selling": "Mode vente",
+  "Currently buying": "Mode achat",
+  "That didn't work. Please try again.": "Cela n'a pas marché. Veuillez réessayer.",
+  "Admin accounts can't switch to buying or selling": "Les comptes admin ne peuvent pas passer à l'achat ou à la vente",
+  "Choose buying or selling": "Choisissez l'achat ou la vente",
+  "Admin accounts don't have a wallet": "Les comptes admin n'ont pas de portefeuille",
+  "Start a transaction with your seller's number, or wait for a seller to create one for you. It will appear here.": "Lancez une transaction avec le numéro de votre vendeur, ou attendez qu'un vendeur en crée une pour vous. Elle apparaîtra ici.",
+  "Everything you're selling, newest first.": "Tout ce que vous vendez, du plus récent au plus ancien.",
+  "Everything you're buying, newest first.": "Tout ce que vous achetez, du plus récent au plus ancien."
 };

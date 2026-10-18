@@ -36,7 +36,10 @@ export default function LoginPage() {
       const res  = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       const data = await res.json();
       if (!res.ok) { setError(t(data.error)); return; }
-      router.push(data.user.role === "admin" ? "/admin" : "/dashboard");
+      // Go back to the page that sent them here (a transaction link, for example)
+      const next = new URLSearchParams(window.location.search).get("next") || "";
+      const safe = next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/auth") ? next : "";
+      router.push(safe || (data.user.role === "admin" ? "/admin" : "/dashboard"));
       router.refresh();
     } catch { setError(t("Something went wrong. Check your connection and try again.")); }
     finally { setLoading(false); }

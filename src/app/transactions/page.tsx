@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getDb, initDb } from "@/lib/db";
+import ModeSwitch from "@/components/ModeSwitch";
 import Navbar from "@/components/Navbar";
 import TradeList from "@/components/TradeList";
 import { getT } from "@/lib/i18n/server";
@@ -36,11 +37,12 @@ export default async function TransactionsPage() {
         <div className="dash-head">
           <div>
             <h1 className="page-title">{t("Transactions")}</h1>
-            <p className="page-sub">{t("Every transaction you're part of, newest first.")}</p>
+            <p className="page-sub">{session.role === "vendor" ? t("Everything you're selling, newest first.") : t("Everything you're buying, newest first.")}</p>
           </div>
-          {session.role === "vendor" && (
+          <div className="dash-actions">
+            <ModeSwitch role={session.role} />
             <Link href="/trade/new" className="btn btn-primary"><Plus size={17} /> {t("New transaction")}</Link>
-          )}
+          </div>
         </div>
         <TradeList trades={trades} role={session.role} pendingRelease={pendingRelease} />
       </main>

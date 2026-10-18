@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { ArrowLeft, CheckCircle, AlertTriangle, Truck, ShieldCheck, RefreshCw, Edit3, Trash2, X, Save, Check, MessageSquareWarning, PhoneCall, Copy } from "lucide-react";
+import { ArrowLeft, CheckCircle, AlertTriangle, Truck, ShieldCheck, RefreshCw, Edit3, Trash2, X, Save, Check, MessageSquareWarning, PhoneCall, Copy, Flag, MessageCircle } from "lucide-react";
 import { MoneyRail, PageLoader, PhoneField, StatusPill, Steps, Timeline } from "@/components/ui";
 import { fmtDate, fmtDateTime, initials, money, shortId, statusMeta, statusStory, ViewerRole } from "@/lib/zola";
 import { COMPLAINT_MAX, COMPLAINT_MIN, REVIEW_HOURS, reviewState, timeLeft } from "@/lib/review";
@@ -12,6 +12,10 @@ import { handoverHow } from "@/lib/handover";
 import { prettyPhone } from "@/lib/support";
 import { quote, feePercentOf, feePercentLabel, DELIVERY_NOTE } from "@/lib/fees";
 import { useT, rich } from "@/components/I18n";
+import { REPORT_MAX, REPORT_MIN, REPORT_REASONS, canReportSeller, reportReasonLabel } from "@/lib/reports";
+import { intlDigits } from "@/lib/support";
+import DeliveryPanel from "@/components/pickup/DeliveryPanel";
+import BranchPicker from "@/components/pickup/BranchPicker";
 
 const NETWORKS = [
   { id: "mtn",    label: "MTN MoMo" },
@@ -19,6 +23,7 @@ const NETWORKS = [
 ];
 
 const DELIVERY_STATUS: Record<string, string> = {
+  awaiting_seller: "Starts once the buyer pays",
   pending_payment: "Starts once the buyer pays",
   funds_held:      "Waiting for the seller to send it to Zola",
   shipped:         "With Zola for delivery",
@@ -30,6 +35,7 @@ const DELIVERY_STATUS: Record<string, string> = {
 };
 
 const PAYOUT_STATUS: Record<string, string> = {
+  awaiting_seller: "Waiting for you to confirm",
   pending_payment: "Waiting for the buyer's payment",
   funds_held:      "Held by Zola until delivery is confirmed",
   shipped:         "Held by Zola until delivery is confirmed",
@@ -78,18 +84,36 @@ export default function TradePage() {
   const [editErr, setEditErr]     = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
+  // A transaction the buyer started: the seller confirms or declines it
+  const [declining, setDeclining]     = useState(false);
+  const [declineWhy, setDeclineWhy]   = useState("");
+  const [acceptBranch, setAcceptBranch] = useState("");
+  const [hasBranches, setHasBranches]   = useState(false);
+  // The Pickup delivery (goods sent through a bus agency)
+  const [delivery, setDelivery]         = useState<any>(null);
+
+  // Reporting the seller (any time, even after completion), and the admin's flag
+  const [sellerFlag, setSellerFlag]   = useState<any>(null);
+  const [myReport, setMyReport]       = useState<any>(null);
+  const [reporting, setReporting]     = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportText, setReportText]   = useState("");
+  const [reportErr, setReportErr]     = useState("");
+  const [reportSent, setReportSent]   = useState(false);
+
   // Delete
   const [delConfirm, setDelConfirm] = useState(false);
   const [deleting, setDeleting]     = useState(false);
 
   const load = useCallback(async () => {
     const me = await (await fetch("/api/auth/me")).json();
-    if (!me.user) { router.push("/auth/login"); return; }
+    if (!me.user) { router.push(`/auth/login?next=${encodeURIComponent(`/trade/${id}`)}`); return; }
     setUser(me.user);
     const res = await fetch(`/api/trades/${id}`);
     if (!res.ok) { router.push("/dashboard"); return; }
     const data = await res.json();
-    setTrade(data.trade); setEvents(data.events || []); setContacts(data.contacts || null); setLoading(false);
+    setTrade(data.trade); setEvents(data.events || []); setContacts(data.contacts || null);
+    setSellerFlag(data.sellerFlag || null); setMyReport(data.myReport || null); setDelivery(data.delivery || null); setLoading(false);
   }, [id, router]);
 
   useEffect(() => { load(); }, [load]);
@@ -116,6 +140,17 @@ export default function TradePage() {
       await load();
       return true;
     } catch { setError("Something went wrong. Check your connection and try again."); return false; }
+    finally { setActing(false); }
+  }
+
+  async function sendReport() {
+    setReportErr(""); setActing(true);
+    try {
+      const res = await fetch("/api/reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tradeId: id, reason: reportReason, details: reportText }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setReportErr(data.error || "Your report could not be sent. Please try again."); return; }
+      setMyReport(data.report); setReporting(false); setReportSent(true); setReportText(""); setReportReason("");
+    } catch { setReportErr("Something went wrong. Check your connection and try again."); }
     finally { setActing(false); }
   }
 
@@ -195,14 +230,21 @@ export default function TradePage() {
     const res  = await fetch(`/api/trades/${id}/notify`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setNotifyMsg(data.error || "The reminder could not be sent. Please try again."); return; }
-    if (data.invited && !data.emailSent && !data.whatsappSent) { setNotifyMsg("The invitation could not be sent. Check the buyer's email and number, or share the link with them yourself."); await load(); return; }
+    if (data.invited && !data.emailSent && !data.whatsappSent) {
+      setNotifyMsg(trade?.status === "awaiting_seller"
+        ? "The invitation could not be sent. Check the seller's email, or send them the link on WhatsApp."
+        : "The invitation could not be sent. Check the buyer's email and number, or share the link with them yourself.");
+      await load(); return;
+    }
     setNotified(true);
     if (data.invited) await load();
   }
 
   // The seller can pass the invitation on themselves (SMS, another chat, in person)
   async function copyInvite() {
-    const link = `${window.location.origin}/auth/register?invite=${id}`;
+    const link = trade?.status === "awaiting_seller" && !trade?.vendor_pending
+      ? `${window.location.origin}/trade/${id}`
+      : `${window.location.origin}/auth/register?invite=${id}`;
     try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2500); }
     catch { window.prompt(t("Copy this link and send it to the buyer"), link); }
   }
@@ -231,7 +273,16 @@ export default function TradePage() {
   const isAdmin  = user?.role === "admin";
   const isBuyer  = user?.id === trade.buyer_id;
   const isVendor = user?.id === trade.vendor_id;
-  const canEdit  = isVendor && trade.status === "pending_payment";
+  // The seller can change their transaction until the buyer pays. A buyer who
+  // started one can change it until the seller confirms, and cancel it until they pay.
+  const startedByBuyer = trade.created_by === "buyer";
+  const canEdit  = (isVendor && trade.status === "pending_payment") || (isBuyer && trade.status === "awaiting_seller");
+  const canDelete = (isVendor && trade.status === "pending_payment")
+    || (isBuyer && startedByBuyer && ["awaiting_seller", "pending_payment"].includes(trade.status));
+  const buyerCancels = isBuyer && startedByBuyer;
+  const vendorPending = !!trade.vendor_pending;
+  const sellerInviteEmail = !!trade.vendor_invite_sent?.email;
+  const reportable = isBuyer && canReportSeller(trade);
   // The buyer has no Zola account yet and has been invited to sign up
   const buyerPending = !!trade.buyer_pending;
   const inviteEmail  = !!trade.buyer_invite_sent?.email;
@@ -250,13 +301,96 @@ export default function TradePage() {
   const reviewUntil = review.endsAt ? fmtDateTime(review.endsAt, lang) : "";
   const complaintLen = complaint.trim().length;
   const total   = Number(trade.buyer_total || trade.amount);
-  const hasPaid = !["pending_payment", "cancelled"].includes(trade.status);
+  const hasPaid = !["awaiting_seller", "pending_payment", "cancelled"].includes(trade.status);
   const isHeld  = s.money === "zola";
 
   /* ── The one thing this person can do right now ── */
   let action: React.ReactNode = null;
 
-  if (isBuyer && trade.status === "pending_payment") {
+  // A ready-made WhatsApp message the buyer sends the seller from their own phone
+  const sellerLink = typeof window !== "undefined"
+    ? `${window.location.origin}${vendorPending ? `/auth/register?invite=${id}` : `/trade/${id}`}`
+    : "";
+  const waText = t("Hi, I've started a Zola transaction to buy “{title}” from you for {price}. Please check the details and confirm, so I can pay safely through Zola: {link}", { title: trade.title, price: money(trade.amount), link: sellerLink });
+  const sellerWa = intlDigits(trade.vendor_phone);
+  const waUrl = `https://wa.me/${sellerWa}?text=${encodeURIComponent(waText)}`;
+
+  if (isVendor && trade.status === "awaiting_seller") {
+    action = (
+      <section className="card card-pad card-wait tx-action fade-up" aria-labelledby="accept-title">
+        <h2 id="accept-title" className="section-title">{t("{name} wants to buy this from you", { name: trade.buyer_name })}</h2>
+        <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
+          {t("Check the item, the description and your price. If they match what you agreed, confirm and the buyer can pay Zola. Don't send anything until Zola tells you the payment is held.")}
+        </p>
+        <div style={{ padding: "8px 14px 12px", background: "var(--bg)", borderRadius: "var(--r-md)", marginBottom: 16 }}>
+          <div className="kv"><span>{t("Item")}</span><span style={{ overflowWrap: "anywhere", textAlign: "right" }}>{trade.title}</span></div>
+          <div className="kv"><span>{t("Delivery")}</span><span>{trade.needs_delivery === false ? t("Nothing to deliver") : t("You send it to Zola")}</span></div>
+          <div className="kv kv-total"><span>{t("You receive")}</span><span style={{ fontSize: 18, fontWeight: 800 }}>{money(trade.amount)}</span></div>
+        </div>
+        {trade.needs_delivery !== false && (
+          <div style={{ marginBottom: 14 }}>
+            {hasBranches && <p className="hint" style={{ marginBottom: 8 }}>{t("Choose the bus agency branch in the buyer's city you will send it to. Once the buyer pays, we give you the Zola rider's name to write on the parcel.")}</p>}
+            <BranchPicker value={acceptBranch} onChange={setAcceptBranch} onLoaded={setHasBranches} idPrefix="acc" />
+          </div>
+        )}
+        {!declining ? (
+          <div className="btn-row">
+            <button onClick={() => act("accept", { destBranchId: acceptBranch })} disabled={acting || (hasBranches && trade.needs_delivery !== false && !acceptBranch)} className="btn btn-primary" style={{ flex: 1 }}>
+              <CheckCircle size={17} /> {acting ? t("Confirming...") : t("Confirm details")}
+            </button>
+            <button onClick={() => { setDeclining(true); setError(""); }} disabled={acting} className="btn btn-secondary">
+              <X size={17} /> {t("Decline")}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label className="label" htmlFor="decline-why">{t("Tell the buyer why (optional)")}</label>
+              <textarea id="decline-why" className="textarea" rows={3} maxLength={500} autoFocus
+                placeholder={t("For example: the price we agreed was FCFA 45,000")}
+                value={declineWhy} onChange={e => setDeclineWhy(e.target.value)} />
+              <p className="hint">{t("The transaction is cancelled. The buyer can start a new one with the right details.")}</p>
+            </div>
+            <div className="btn-row">
+              <button onClick={async () => { if (await act("decline", { reason: declineWhy })) { setDeclining(false); setDeclineWhy(""); } }} disabled={acting} className="btn btn-danger" style={{ flex: 1 }}>
+                {acting ? t("Declining...") : t("Decline transaction")}
+              </button>
+              <button onClick={() => setDeclining(false)} disabled={acting} className="btn btn-secondary">{t("Back")}</button>
+            </div>
+          </>
+        )}
+      </section>
+    );
+  } else if (isBuyer && trade.status === "awaiting_seller") {
+    action = (
+      <section className="card card-pad tx-action fade-up" aria-labelledby="await-title">
+        <h2 id="await-title" className="section-title">{vendorPending ? t("Waiting for the seller to join Zola") : t("Waiting for the seller to confirm")}</h2>
+        <p className="hint" style={{ margin: "2px 0 14px", fontSize: 14 }}>
+          {vendorPending
+            ? (sellerInviteEmail
+                ? t("This seller doesn't have a Zola account yet. We emailed them ({email}) an invitation to sign up and confirm. Send them the link on WhatsApp too, so they see it quickly.", { email: trade.vendor_invite_email })
+                : t("This seller doesn't have a Zola account yet, and the email invitation didn't go through. Send them the link on WhatsApp."))
+            : t("{name} has been notified. You can pay as soon as they confirm the details. Send them a WhatsApp message to speed things up.", { name: trade.vendor_name })}
+          {" "}{t("You pay nothing until then.")}
+        </p>
+        <div className="btn-row">
+          {sellerWa && (
+            <a href={waUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary">
+              <MessageCircle size={16} /> {t("Send on WhatsApp")}
+            </a>
+          )}
+          <button onClick={notify} className="btn btn-secondary">
+            <RefreshCw size={16} /> {vendorPending ? t("Send the invitation again") : t("Send a reminder")}
+          </button>
+          <button onClick={copyInvite} className="btn btn-secondary">
+            <Copy size={16} /> {copied ? t("Link copied") : t("Copy link")}
+          </button>
+        </div>
+        {notified && <p role="status" style={{ fontSize: 14, color: "var(--emerald-press)", fontWeight: 600, marginTop: 10 }}>{vendorPending ? t("Invitation sent again.") : t("Reminder sent.")}</p>}
+        {notifyMsg && <p role="alert" className="hint-error" style={{ marginTop: 10 }}>{t(notifyMsg)}</p>}
+      </section>
+    );
+  } else if (isBuyer && trade.status === "pending_payment") {
     action = !paymentSent ? (
       <section className="card card-pad tx-action" aria-labelledby="pay-title">
         <h2 id="pay-title" className="section-title">{t("Pay securely")}</h2>
@@ -402,6 +536,9 @@ export default function TradePage() {
         {notifyMsg && <p role="alert" className="hint-error" style={{ marginTop: 10 }}>{t(notifyMsg)}</p>}
       </section>
     );
+  } else if (isVendor && trade.status === "funds_held" && trade.dest_branch && hasDelivery) {
+    // Goods through a bus agency: the seller sends it to the Pickup rider
+    action = <DeliveryPanel trade={trade} delivery={delivery} viewer="seller" onChange={load} act={act} acting={acting} />;
   } else if (isVendor && trade.status === "funds_held") {
     action = (
       <section className="card card-pad card-mint tx-action fade-up" aria-labelledby="ship-title">
@@ -662,15 +799,19 @@ export default function TradePage() {
             <h1 className="page-title" style={{ margin: "10px 0 4px", overflowWrap: "anywhere" }}>{trade.title}</h1>
             <p className="tx-id">{t("Transaction ID")} <strong>{shortId(trade.id)}</strong></p>
           </div>
-          {canEdit && !editing && (
+          {(canEdit || canDelete) && !editing && (
             <div className="btn-row" style={{ flexShrink: 0, flexWrap: "nowrap" }}>
-              <button className="btn btn-secondary btn-sm" style={{ flex: "0 0 auto" }}
-                onClick={() => { setEditForm({ title: trade.title, description: trade.description, amount: String(trade.amount), deliveryDays: String(trade.delivery_days || 7), needsDelivery: trade.needs_delivery !== undefined ? trade.needs_delivery !== false : Number(trade.delivery_fee) > 0 }); setEditing(true); setEditErr(""); }}>
-                <Edit3 size={15} /> {t("Edit")}
-              </button>
-              <button className="btn btn-danger-outline btn-sm" style={{ flex: "0 0 auto" }} onClick={() => setDelConfirm(true)}>
-                <Trash2 size={15} /> {t("Delete")}
-              </button>
+              {canEdit && (
+                <button className="btn btn-secondary btn-sm" style={{ flex: "0 0 auto" }}
+                  onClick={() => { setEditForm({ title: trade.title, description: trade.description, amount: String(trade.amount), deliveryDays: String(trade.delivery_days || 7), needsDelivery: trade.needs_delivery !== undefined ? trade.needs_delivery !== false : Number(trade.delivery_fee) > 0 }); setEditing(true); setEditErr(""); }}>
+                  <Edit3 size={15} /> {t("Edit")}
+                </button>
+              )}
+              {canDelete && (
+                <button className="btn btn-danger-outline btn-sm" style={{ flex: "0 0 auto" }} onClick={() => setDelConfirm(true)}>
+                  {buyerCancels ? <X size={15} /> : <Trash2 size={15} />} {buyerCancels ? t("Cancel") : t("Delete")}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -678,11 +819,15 @@ export default function TradePage() {
         {/* Delete confirm */}
         {delConfirm && (
           <div className="card card-pad card-danger fade-up" role="alertdialog" aria-labelledby="del-title" style={{ marginBottom: 16 }}>
-            <h2 id="del-title" className="section-title">{t("Delete this transaction?")}</h2>
-            <p className="hint" style={{ margin: "2px 0 14px" }}>{t("This can't be undone. The transaction and its activity history will be removed.")}</p>
+            <h2 id="del-title" className="section-title">{buyerCancels ? t("Cancel this transaction?") : t("Delete this transaction?")}</h2>
+            <p className="hint" style={{ margin: "2px 0 14px" }}>
+              {buyerCancels
+                ? t("Nothing has been paid. The seller is told you cancelled, and the transaction is removed.")
+                : t("This can't be undone. The transaction and its activity history will be removed.")}
+            </p>
             <div className="btn-row">
               <button onClick={deleteTrade} disabled={deleting} className="btn btn-danger">
-                {deleting ? t("Deleting...") : t("Delete transaction")}
+                {deleting ? (buyerCancels ? t("Cancelling...") : t("Deleting...")) : buyerCancels ? t("Cancel transaction") : t("Delete transaction")}
               </button>
               <button onClick={() => setDelConfirm(false)} className="btn btn-secondary">{t("Keep it")}</button>
             </div>
@@ -750,6 +895,30 @@ export default function TradePage() {
           </div>
         )}
 
+        {/* Zola flagged this seller after reports from buyers */}
+        {sellerFlag?.flagged && isBuyer && !["complete", "cancelled"].includes(trade.status) && (
+          <div className="notice notice-danger fade-up" role="alert" style={{ marginBottom: 16 }}>
+            <Flag size={16} />
+            <span>
+              <strong>{t("Be careful with this seller.")}</strong>{" "}
+              {t("Zola has received reports about {name}.", { name: trade.vendor_name })}{" "}
+              {hasPaid
+                ? t("Check your order carefully before you confirm delivery, and contact Zola if anything seems wrong.")
+                : t("Think carefully before paying, and never pay the seller outside Zola.")}
+            </span>
+          </div>
+        )}
+        {sellerFlag?.flagged && isAdmin && (
+          <div className="notice notice-danger fade-up" style={{ marginBottom: 16 }}>
+            <Flag size={16} />
+            <span suppressHydrationWarning>
+              <strong>This seller is flagged.</strong> Buyers see a warning on this transaction.
+              {sellerFlag.by ? ` Flagged by ${sellerFlag.by}${sellerFlag.at ? ` on ${fmtDate(sellerFlag.at)}` : ""}.` : ""}
+              {sellerFlag.note ? ` Note: ${sellerFlag.note}` : ""}
+            </span>
+          </div>
+        )}
+
         <div className="tx-layout">
           <div className="tx-main">
 
@@ -760,7 +929,7 @@ export default function TradePage() {
               <MoneyRail
                 at={s.money}
                 you={isBuyer ? "buyer" : isVendor ? "seller" : undefined}
-                names={{ buyer: buyerPending ? t("Invited buyer") : trade.buyer_name?.split(" ")[0], seller: trade.vendor_name?.split(" ")[0] }}
+                names={{ buyer: buyerPending ? t("Invited buyer") : trade.buyer_name?.split(" ")[0], seller: vendorPending ? t("Invited seller") : trade.vendor_name?.split(" ")[0] }}
               />
               <p className="where">{story.where}</p>
 
@@ -780,6 +949,9 @@ export default function TradePage() {
             </section>
 
             {action}
+
+            {/* Where the parcel is (buyer and admin) */}
+            {trade.dest_branch && (isBuyer || isAdmin) && <DeliveryPanel trade={trade} delivery={delivery} viewer={isBuyer ? "buyer" : "admin"} onChange={load} />}
 
             {/* Activity */}
             <section className="card card-pad tx-activity fade-up" aria-labelledby="activity-title">
@@ -833,7 +1005,9 @@ export default function TradePage() {
                 buyerPending
                   ? { role: "Buyer, invited, not on Zola yet", name: prettyPhone(trade.buyer_phone), avatar: "?", you: false }
                   : { role: "Buyer", name: trade.buyer_name, avatar: trade.buyer_avatar, you: isBuyer },
-                { role: "Seller", name: trade.vendor_name, avatar: trade.vendor_avatar, you: isVendor },
+                vendorPending
+                  ? { role: "Seller, invited, not on Zola yet", name: prettyPhone(trade.vendor_phone), avatar: "?", you: false }
+                  : { role: "Seller", name: trade.vendor_name, avatar: trade.vendor_avatar, you: isVendor },
               ].map(p => (
                 <div key={p.role} className="party">
                   <span className="avatar">{initials(p.name, p.avatar)}</span>
@@ -850,10 +1024,12 @@ export default function TradePage() {
               <div className="kv"><span>{t("Delivery")}</span><span>{trade.needs_delivery === false ? t("Not needed for this transaction") : DELIVERY_STATUS[trade.status] ? t(DELIVERY_STATUS[trade.status]) : "—"}</span></div>
               {trade.delivery_deadline
                 ? <div className="kv"><span>{t("Deliver by")}</span><span suppressHydrationWarning>{fmtDate(trade.delivery_deadline, lang)}</span></div>
-                : trade.delivery_days && trade.status === "pending_payment"
+                : trade.delivery_days && ["awaiting_seller", "pending_payment"].includes(trade.status)
                   ? <div className="kv"><span>{t("Delivery time")}</span><span>{Number(trade.delivery_days) === 1 ? t("1 day after payment") : t("{n} days after payment", { n: trade.delivery_days })}</span></div>
                   : null}
-              {trade.tracking_number && <div className="kv"><span>{t("Tracking number")}</span><span>{trade.tracking_number}</span></div>}
+              {trade.dest_branch && <div className="kv"><span>{t("Sent to")}</span><span style={{ textAlign: "right" }}>{trade.dest_branch.agency}, {trade.dest_branch.name} ({trade.dest_branch.city})</span></div>}
+              {trade.dest_branch && delivery?.rider_name && isVendor && <div className="kv"><span>{t("Zola rider")}</span><span>{delivery.rider_name}</span></div>}
+              {trade.tracking_number && <div className="kv"><span>{trade.dest_branch ? t("Agency receipt") : t("Tracking number")}</span><span>{trade.tracking_number}</span></div>}
               {trade.created_at && <div className="kv"><span>{t("Created")}</span><span suppressHydrationWarning>{fmtDate(trade.created_at, lang)}</span></div>}
               {deliveryFee > 0 && !isVendor && !["complete", "cancelled"].includes(trade.status) && (
                 <p className="hint" style={{ marginTop: 10 }}>{t(DELIVERY_NOTE)}</p>
@@ -868,6 +1044,62 @@ export default function TradePage() {
                   <ContactRow role="Buyer" name={contacts?.buyer?.name || trade.buyer_name} phone={contacts?.buyer?.phone || trade.buyer_phone} email={contacts?.buyer?.email || trade.buyer_email} />
                 )}
                 <ContactRow role="Seller" name={contacts?.seller?.name || trade.vendor_name} phone={contacts?.seller?.phone}                      email={contacts?.seller?.email || trade.vendor_email} />
+              </section>
+            )}
+
+            {/* Report the seller: open to the buyer at any stage, even after completion */}
+            {reportable && (
+              <section className="card card-pad fade-up" aria-labelledby="report-title">
+                {myReport ? (
+                  <>
+                    <h2 id="report-title" className="section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}><Flag size={16} /> {t("You reported this seller")}</h2>
+                    <p className="hint" style={{ marginTop: 4 }} suppressHydrationWarning>
+                      {reportSent
+                        ? t("Thanks. Zola reviews every report and may contact you. The seller is not told who reported them.")
+                        : t("Sent {date}: {reason}. Zola reviews every report and may contact you.", { date: fmtDate(myReport.created_at, lang), reason: t(reportReasonLabel(myReport.reason)) })}
+                    </p>
+                  </>
+                ) : !reporting ? (
+                  <>
+                    <h2 id="report-title" className="section-title">{t("Problem with this seller?")}</h2>
+                    <p className="hint" style={{ margin: "4px 0 12px" }}>
+                      {t("Tell Zola, even after the transaction is completed. The seller is not told who reported them.")}
+                    </p>
+                    <button onClick={() => { setReporting(true); setReportErr(""); }} className="btn btn-secondary btn-sm">
+                      <Flag size={15} /> {t("Report this seller")}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h2 id="report-title" className="section-title">{t("Report {name}", { name: trade.vendor_name })}</h2>
+                    <p className="hint" style={{ margin: "4px 0 12px" }}>{t("Zola reviews every report. If other buyers should be careful, we warn them about this seller.")}</p>
+                    {reportErr && <div className="notice notice-danger" role="alert" style={{ marginBottom: 12 }}>{t(reportErr)}</div>}
+                    <fieldset className="field" style={{ border: "none", padding: 0, margin: "0 0 12px" }}>
+                      <legend className="label" style={{ marginBottom: 6 }}>{t("What happened?")}</legend>
+                      <div className="report-reasons">
+                        {REPORT_REASONS.map(r => (
+                          <label key={r.key} className="report-reason">
+                            <input type="radio" name="report-reason" value={r.key} checked={reportReason === r.key} onChange={() => setReportReason(r.key)} />
+                            <span>{t(r.label)}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <div className="field" style={{ marginBottom: 12 }}>
+                      <label className="label" htmlFor="report-text">{t("Tell us more")}</label>
+                      <textarea id="report-text" className="textarea" rows={4} maxLength={REPORT_MAX}
+                        placeholder={t("What happened, and when? Include anything that helps us check.")}
+                        value={reportText} onChange={e => setReportText(e.target.value)} />
+                      <p className="hint">{reportText.trim().length < REPORT_MIN ? t("A sentence or two is enough.") : t("{n} of {max} characters", { n: reportText.trim().length, max: REPORT_MAX })}</p>
+                    </div>
+                    <div className="btn-row">
+                      <button onClick={sendReport} disabled={acting || !reportReason || reportText.trim().length < REPORT_MIN} className="btn btn-danger" style={{ flex: 1 }}>
+                        {acting ? t("Sending...") : t("Send report")}
+                      </button>
+                      <button onClick={() => setReporting(false)} disabled={acting} className="btn btn-secondary">{t("Cancel")}</button>
+                    </div>
+                  </>
+                )}
               </section>
             )}
 

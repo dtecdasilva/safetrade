@@ -30,6 +30,8 @@ export interface StatusMeta {
 
 /** Keys are the existing transaction statuses stored in the database. */
 export const STATUS: Record<string, StatusMeta> = {
+  // Started by the buyer: the seller has to confirm the details before the buyer can pay
+  awaiting_seller: { label: "Waiting for seller", tone: "wait", step: 1, money: "buyer"  },
   pending_payment: { label: "Payment pending", tone: "wait",   step: 1, money: "buyer"  },
   funds_held:      { label: "Paid",            tone: "ok",     step: 2, money: "zola"   },
   shipped:         { label: "Shipped",         tone: "info",   step: 3, money: "zola"   },
@@ -136,7 +138,7 @@ export interface StatusStory {
  * Pass the screen's t() so the answers come out in the reader's language.
  */
 export function statusStory(
-  trade: { status: string; amount: number; buyer_total?: number; buyer_name?: string; vendor_name?: string; needs_delivery?: boolean; delivery_fee?: number; buyer_pending?: boolean } & ReviewFields,
+  trade: { status: string; amount: number; buyer_total?: number; buyer_name?: string; vendor_name?: string; needs_delivery?: boolean; delivery_fee?: number; buyer_pending?: boolean; vendor_pending?: boolean } & ReviewFields,
   viewer: ViewerRole,
   now: number = Date.now(),
   t: T = (s, p) => interpolate(s, p),
@@ -155,6 +157,28 @@ export function statusStory(
   const noOne = t("No one");
 
   switch (trade.status) {
+    case "awaiting_seller":
+      // The buyer started this and invited a seller who has no account yet
+      if (trade.vendor_pending) {
+        return {
+          where: t("Nothing has been paid yet."),
+          next: isBuyer
+            ? t("The seller creates a Zola account from the invitation, then confirms the details. After that, you pay.")
+            : t("The seller creates a Zola account from the invitation, then confirms the details."),
+          who: t("The seller"),
+          yourMove: false,
+        };
+      }
+      return {
+        where: t("Nothing has been paid yet."),
+        next: isSeller
+          ? t("{buyer} wants to buy this from you. Check the details: if they're right, confirm and the buyer can pay.", { buyer })
+          : isBuyer
+            ? t("{seller} checks the details and confirms. Then you pay {total} to Zola.", { seller, total })
+            : t("{seller} needs to confirm the details before {buyer} can pay.", { seller, buyer }),
+        who: isSeller ? you : seller,
+        yourMove: isSeller,
+      };
     case "pending_payment":
       // The buyer was invited and has not created their account yet
       if (trade.buyer_pending) {
@@ -178,7 +202,13 @@ export function statusStory(
     case "funds_held":
       return {
         where: isBuyer ? t("Your payment is safely held by Zola.") : t("{held} is safely held by Zola.", { held }),
-        next: isBuyer
+        next: (trade as any).dest_branch && goods
+          ? (isBuyer
+              ? t("The seller sends your order through a bus agency, and a Zola rider brings it to you.")
+              : isSeller
+                ? t("Send the parcel through the agency to your Zola rider, then enter the receipt number.")
+                : t("The seller sends it through the agency to the Pickup rider."))
+          : isBuyer
           ? (goods ? t("The seller sends your order to Zola, and Zola delivers it to you.") : t("The seller needs to complete what you agreed."))
           : isSeller
             ? (goods ? t("Send the item to Zola for delivery, then mark it as sent.") : t("Complete the work, then mark it as delivered."))

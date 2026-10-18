@@ -8,7 +8,8 @@ import { auth } from "./auth";
 import { trade } from "./trade";
 import { money } from "./money";
 import { messages } from "./messages";
+import { pickup } from "./pickup";
 
 export const FR: Record<string, string> = {
-  ...common, ...pages, ...auth, ...trade, ...money, ...messages,
+  ...common, ...pages, ...auth, ...trade, ...money, ...messages, ...pickup,
 };

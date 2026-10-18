@@ -26,7 +26,7 @@ export default function WithdrawPage() {
   const loadData = async () => {
     const me = await (await fetch("/api/auth/me")).json();
     if (!me.user) { router.push("/auth/login"); return; }
-    if (me.user.role !== "vendor") { router.push("/dashboard"); return; }
+    if (me.user.role === "admin") { router.push("/admin"); return; }
     setUser(me.user);
     const [wr, br] = await Promise.all([fetch("/api/withdrawals"), fetch("/api/withdrawals/balance")]);
     const [wd, bd] = await Promise.all([wr.json(), br.json()]);
