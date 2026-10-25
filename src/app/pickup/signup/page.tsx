@@ -6,6 +6,7 @@ import { useT } from "@/components/I18n";
 import { usePk } from "@/components/pickup/Base";
 import { PhoneField } from "@/components/ui";
 import PickupMap from "@/components/pickup/Map";
+import PlaceSearch from "@/components/pickup/PlaceSearch";
 
 export default function RiderSignup() {
   const { t, lang } = useT();
@@ -78,6 +79,7 @@ export default function RiderSignup() {
           <p className="hint" style={{ marginBottom: 6 }}>{t("Used to give you parcels near you when your live location is off. Press the button, or tap the map.")}</p>
           <button type="button" className="btn btn-secondary btn-sm" onClick={locate} style={{ alignSelf: "flex-start" }}><LocateFixed size={15} /> {t("Use my location")}</button>
           {locMsg && <p className="hint-error">{t(locMsg)}</p>}
+          <PlaceSearch city={form.city} onPick={(p) => { setBase({ lat: p.lat, lng: p.lng }); if (!form.baseAddress.trim()) setForm((f) => ({ ...f, baseAddress: p.name })); }} />
           <PickupMap height={200} pick={base} onPick={setBase} />
           <input className="input" aria-label={t("Neighbourhood")} placeholder={t("Neighbourhood, for example Akwa")} value={form.baseAddress} onChange={(e) => setForm((f) => ({ ...f, baseAddress: e.target.value }))} />
         </div>

@@ -4,6 +4,7 @@ import { LocateFixed } from "lucide-react";
 import { useT } from "@/components/I18n";
 import BranchPicker from "@/components/pickup/BranchPicker";
 import PickupMap from "@/components/pickup/Map";
+import PlaceSearch from "@/components/pickup/PlaceSearch";
 
 /**
  * Where the Pickup rider collects the parcel:
@@ -88,6 +89,7 @@ export default function OriginPicker({
             <span className="label">{t("Where the rider collects it")}</span>
             <button type="button" className="btn btn-secondary btn-sm" onClick={locate} style={{ alignSelf: "flex-start" }}><LocateFixed size={15} /> {t("Use my location")}</button>
             {locErr && <p className="hint-error">{t(locErr)}</p>}
+            <PlaceSearch city={value.originCity} onPick={(p) => set({ originLat: p.lat, originLng: p.lng, ...(!(value.originLandmark || "").trim() ? { originLandmark: p.name } : {}) })} />
             <PickupMap height={200} pick={spot} onPick={(p) => set({ originLat: p.lat, originLng: p.lng })} />
             <input className="input" aria-label={t("How the rider finds you")} maxLength={160} value={value.originLandmark || ""}
               onChange={(e) => set({ originLandmark: e.target.value })} placeholder={t("For example: Akwa, shop next to Orange, ask for Awa")} />

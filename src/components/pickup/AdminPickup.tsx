@@ -7,6 +7,7 @@ import { DELIVERY_STATUS, DeliveryStatus, priceForKm } from "@/lib/pickup/config
 import { intlDigits } from "@/lib/support";
 import { Pill } from "@/components/ui";
 import PickupMap from "@/components/pickup/Map";
+import PlaceSearch from "@/components/pickup/PlaceSearch";
 import { fmtDateTime, money } from "@/lib/zola";
 import { pickupUrl } from "@/lib/pickup/config";
 
@@ -122,6 +123,7 @@ function Deliveries() {
           <div className="field"><span className="label">From</span><OriginPicker value={origin} onChange={setOrigin} who="sender" idPrefix="ad" /></div>
           <div className="field">
             <span className="label">To</span>
+            <PlaceSearch city={origin.deliveryMode === "same_city" ? origin.originCity : undefined} onPick={(p) => { setDest({ lat: p.lat, lng: p.lng }); if (!form.destLandmark.trim()) set("destLandmark", p.name); }} />
             <PickupMap height={220} pick={dest} onPick={setDest} />
             <input className="input" placeholder="Landmark, for example: Bonapriso, behind Santa Lucia" aria-label="Delivery landmark" value={form.destLandmark} onChange={(e) => set("destLandmark", e.target.value)} />
           </div>
@@ -317,6 +319,7 @@ function Agencies() {
               onClick={() => navigator.geolocation?.getCurrentPosition((p) => setForm((f: any) => ({ ...f, lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6) })))}>
               <LocateFixed size={15} /> Use my location
             </button>
+            <PlaceSearch city={form.city} onPick={(p) => setForm((f: any) => ({ ...f, lat: String(p.lat), lng: String(p.lng), address: f.address || p.name }))} />
             <PickupMap height={240} pick={pin} onPick={(p) => setForm((f: any) => ({ ...f, lat: String(p.lat), lng: String(p.lng) }))} />
             <div className="form-grid-2">
               <input className="input num" aria-label="Latitude" placeholder="Latitude" value={form.lat} onChange={(e) => setForm((f: any) => ({ ...f, lat: e.target.value }))} />

@@ -1013,3 +1013,8 @@ img, svg { max-width: 100%; }
 .pk-code { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--bg); }
 .pk-code-num { font-size: 30px; font-weight: 800; letter-spacing: 8px; color: var(--navy); line-height: 1.2; }
 @media (max-width: 480px) { .pk-recipient { grid-template-columns: 1fr; } }
+.pk-search { display: grid; gap: 6px; }
+.pk-results { list-style: none; margin: 0; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); max-height: 240px; overflow-y: auto; }
+.pk-results button { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 9px 10px; border: none; background: none; text-align: left; font: inherit; font-size: 14px; color: var(--navy); cursor: pointer; border-radius: 8px; }
+.pk-results button:hover, .pk-results button:focus-visible { background: var(--fill); }
+.pk-results svg { flex-shrink: 0; margin-top: 2px; color: #F08A24; }

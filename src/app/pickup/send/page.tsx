@@ -6,6 +6,7 @@ import { useT } from "@/components/I18n";
 import { usePk } from "@/components/pickup/Base";
 import { PhoneField } from "@/components/ui";
 import PickupMap from "@/components/pickup/Map";
+import PlaceSearch from "@/components/pickup/PlaceSearch";
 import OriginPicker, { OriginValue, originReady } from "@/components/pickup/OriginPicker";
 import { money } from "@/lib/zola";
 
@@ -92,6 +93,8 @@ export default function SendPage() {
         <h2 className="pk-h2">{t("To")}</h2>
         <div className="stack" style={{ gap: 10 }}>
           <button type="button" className="btn btn-secondary btn-sm" onClick={locateDest} style={{ alignSelf: "flex-start" }}><LocateFixed size={15} /> {t("I'm at the delivery place")}</button>
+          <PlaceSearch city={origin.deliveryMode === "same_city" ? origin.originCity : undefined} placeholder={t("Search the delivery place, for example Total Bonamoussadi")}
+            onPick={(p) => { setDest({ lat: p.lat, lng: p.lng }); if (!form.destLandmark.trim()) set("destLandmark", p.name); }} />
           <PickupMap height={220} pick={dest} onPick={setDest} />
           <p className="hint">{t("Tap the map where it should be delivered.")}</p>
           <input className="input" maxLength={200} aria-label={t("How the rider finds the place")} placeholder={t("For example: behind Total Bonamoussadi, blue gate")} value={form.destLandmark} onChange={(e) => set("destLandmark", e.target.value)} />

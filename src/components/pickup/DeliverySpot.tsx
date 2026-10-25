@@ -3,6 +3,7 @@ import { useState } from "react";
 import { LocateFixed, MapPin } from "lucide-react";
 import { useT } from "@/components/I18n";
 import PickupMap from "@/components/pickup/Map";
+import PlaceSearch from "@/components/pickup/PlaceSearch";
 
 /** The buyer marks where the rider should bring the parcel. */
 export default function DeliverySpot({ tradeId, initial, onSaved, saveLabel }: {
@@ -43,6 +44,7 @@ export default function DeliverySpot({ tradeId, initial, onSaved, saveLabel }: {
       <button type="button" className="btn btn-secondary btn-sm" onClick={locate} style={{ alignSelf: "flex-start" }}>
         <LocateFixed size={15} /> {t("Use my location")}
       </button>
+      <PlaceSearch onPick={(p) => { setSpot({ lat: p.lat, lng: p.lng }); if (!landmark.trim()) setLandmark(p.name); }} />
       <PickupMap height={220} pick={spot} onPick={setSpot} />
       <p className="hint"><MapPin size={13} /> {t("Tap the map to move the pin.")}</p>
       <div className="field">

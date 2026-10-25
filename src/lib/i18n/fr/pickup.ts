@@ -264,5 +264,14 @@ export const pickup: Record<string, string> = {
   "Your Pickup rider collects this from you. Hand it over when they arrive.": "Votre livreur Pickup le récupère chez vous. Remettez-le à son arrivée.",
   "The delivery price was set from your spot when you paid, so it can't be moved now. Call the rider or Zola customer service if you need to meet somewhere else.": "Le prix de la livraison a été fixé selon votre lieu au moment du paiement : il ne peut plus être changé. Appelez le livreur ou le service client de Zola pour vous retrouver ailleurs.",
   "You're paying for this right now, so it can't be changed. Try again in a few minutes.": "Vous êtes en train de payer, cela ne peut pas être modifié. Réessayez dans quelques minutes.",
-  "Delivery": "Livraison"
+  "Delivery": "Livraison",
+  "Search for a place": "Rechercher un lieu",
+  "Search a place, for example Carrefour Bastos": "Rechercher un lieu, par exemple Carrefour Bastos",
+  "Search the delivery place, for example Total Bonamoussadi": "Rechercher le lieu de livraison, par exemple Total Bonamoussadi",
+  "Searching...": "Recherche...",
+  "Search": "Rechercher",
+  "Nothing found. Try another name, or tap the map.": "Rien trouvé. Essayez un autre nom, ou touchez la carte.",
+  "Places found": "Lieux trouvés",
+  "Type at least 3 letters": "Tapez au moins 3 lettres",
+  "Search isn't available right now. Tap the map instead.": "La recherche n'est pas disponible pour le moment. Touchez plutôt la carte."
 };
