@@ -127,7 +127,8 @@ export default function RiderApp() {
 
   const approved = rider.status === "approved";
   const markers: MapMarker[] = [];
-  if (job) markers.push({ id: "branch", lat: job.branch.lat, lng: job.branch.lng, kind: "branch", label: `${job.branch.agency}, ${job.branch.name}` });
+  const sameCity = job?.mode === "same_city";
+  if (job?.origin) markers.push({ id: "branch", lat: job.origin.lat, lng: job.origin.lng, kind: "branch", label: job.origin.label });
   if (job?.dest) markers.push({ id: "dest", lat: job.dest.lat, lng: job.dest.lng, kind: "dest", label: t("Buyer") });
   if (me) markers.push({ id: "me", lat: me.lat, lng: me.lng, kind: "rider", label: t("You") });
 
@@ -159,27 +160,41 @@ export default function RiderApp() {
           <h2 id="job-title" className="pk-h2">{job.title}</h2>
           <div className="kv"><span>{t("Value")}</span><span>{money(job.amount)}</span></div>
           <div className="kv"><span>{t("You earn")}</span><strong>{money(job.rider_pay)}</strong></div>
-          <div className="kv"><span>{t("Collect at")}</span><span style={{ textAlign: "right" }}>{job.branch.agency}, {job.branch.name}<br /><span className="hint">{job.branch.address || job.branch.city}</span></span></div>
+          <div className="kv"><span>{t("Collect at")}</span><span style={{ textAlign: "right" }}>{sameCity ? job.seller_name : job.origin?.label}<br /><span className="hint">{sameCity ? job.origin?.label : job.origin?.landmark || job.origin?.city}</span></span></div>
           {job.receipt_no && <div className="kv"><span>{t("Agency receipt")}</span><strong className="num">{job.receipt_no}</strong></div>}
 
           <PickupMap markers={markers} height={220} follow="me" />
 
-          {job.status === "assigned" && (
+          {job.status === "assigned" && sameCity && (
+            <>
+              <p className="hint" style={{ margin: "12px 0" }}>{t("Go to {seller} and collect the parcel. Check it matches what was ordered before you take it.", { seller: job.seller_name })}</p>
+              <div className="btn-row">
+                {job.seller_phone && <a className="btn btn-secondary" href={`tel:+${intlDigits(job.seller_phone)}`}><Phone size={16} /> {t("Call {name}", { name: job.seller_name.split(" ")[0] })}</a>}
+                <a className="btn btn-secondary" href={mapsLink(job.origin)} target="_blank" rel="noopener noreferrer"><Navigation size={16} /> {t("Directions")}</a>
+              </div>
+              <div className="btn-row" style={{ marginTop: 10 }}>
+                <button className="btn btn-primary" disabled={busy} onClick={() => post("/api/pickup/job", { action: "collected" })}><PackageCheck size={16} /> {t("I've collected it")}</button>
+                <button className="btn btn-danger-outline" disabled={busy} onClick={() => { if (confirm(t("Give this delivery to another rider?"))) post("/api/pickup/job", { action: "decline" }); }}>{t("I can't take it")}</button>
+              </div>
+            </>
+          )}
+
+          {job.status === "assigned" && !sameCity && (
             <>
               <p className="hint" style={{ margin: "12px 0" }}>{t("{seller} is sending this parcel in your name. Wait for the agency receipt number before you go to the branch.", { seller: job.seller_name })}</p>
               <div className="btn-row">
-                <a className="btn btn-secondary" href={mapsLink(job.branch)} target="_blank" rel="noopener noreferrer"><Navigation size={16} /> {t("Directions to the branch")}</a>
+                <a className="btn btn-secondary" href={mapsLink(job.origin)} target="_blank" rel="noopener noreferrer"><Navigation size={16} /> {t("Directions to the branch")}</a>
                 <button className="btn btn-danger-outline" disabled={busy} onClick={() => { if (confirm(t("Give this delivery to another rider?"))) post("/api/pickup/job", { action: "decline" }); }}>{t("I can't take it")}</button>
               </div>
               <p className="hint" style={{ marginTop: 10 }}>{t("Already have it? You can mark it as collected.")} <button className="link-btn" onClick={() => setConfirmCollect(true)}>{t("Collected")}</button></p>
             </>
           )}
 
-          {(job.status === "sent" || (job.status === "assigned" && confirmCollect)) && (
+          {(job.status === "sent" || (job.status === "assigned" && !sameCity && confirmCollect)) && (
             <>
               <p className="hint" style={{ margin: "12px 0" }}>{t("Collect it at the branch with the receipt number. Open it and check it matches what was ordered before you take it.")}</p>
               <div className="btn-row">
-                <a className="btn btn-secondary" href={mapsLink(job.branch)} target="_blank" rel="noopener noreferrer"><Navigation size={16} /> {t("Directions to the branch")}</a>
+                <a className="btn btn-secondary" href={mapsLink(job.origin)} target="_blank" rel="noopener noreferrer"><Navigation size={16} /> {t("Directions to the branch")}</a>
                 <button className="btn btn-primary" disabled={busy} onClick={() => post("/api/pickup/job", { action: "collected" })}><PackageCheck size={16} /> {t("I've collected it")}</button>
               </div>
             </>

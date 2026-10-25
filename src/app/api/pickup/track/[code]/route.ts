@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { isPoint } from "@/lib/pickup/config";
+import { isPoint, originOf } from "@/lib/pickup/config";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,11 @@ export async function GET(_req: NextRequest, { params }: { params: { code: strin
     return NextResponse.json({
       title: d.title,
       status: d.status,
-      branch: { agency: d.branch.agency, name: d.branch.name, city: d.branch.city, lat: d.branch.lat, lng: d.branch.lng },
+      mode: d.mode || (d.branch ? "out_of_town" : "same_city"),
+      paid: d.status !== "awaiting_payment",
+      branch: d.branch ? { agency: d.branch.agency, name: d.branch.name, city: d.branch.city } : null,
+      // Same city: show the area, not the sender's exact door
+      origin: (() => { const o = originOf(d)!; return d.branch ? { lat: o.lat, lng: o.lng, label: o.label, city: o.city } : { lat: Math.round(o.lat * 200) / 200, lng: Math.round(o.lng * 200) / 200, label: o.city, city: o.city }; })(),
       rider: d.rider_name ? String(d.rider_name).split(" ")[0] : "",
       rider_loc: moving ? d.rider_loc : null,
       dest: d.status !== "delivered" && isPoint(d.dest) ? { lat: d.dest.lat, lng: d.dest.lng } : null,

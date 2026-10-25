@@ -26,7 +26,10 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
   const [cands, setCands] = useState<any[] | null>(null);
   const [pick, setPick] = useState("");
   const [msg, setMsg] = useState("");
-  const branch = delivery?.branch || trade.dest_branch;
+  const branch = delivery?.branch || trade.dest_branch || null;
+  const origin = delivery?.origin || trade.origin || (branch ? { label: `${branch.agency}, ${branch.name}`, city: branch.city } : null);
+  const sameCity = (delivery?.mode || trade.delivery_mode) === "same_city";
+  const fromText = sameCity ? (viewer === "buyer" ? t("The seller, in {city}", { city: origin?.city || "" }) : `${origin?.label} (${origin?.city})`) : branch ? `${branch.agency}, ${branch.name} (${branch.city})` : "";
   const status: DeliveryStatus = delivery?.status || "waiting_rider";
   const label = t((DELIVERY_STATUS[status] || DELIVERY_STATUS.waiting_rider).label);
   const track = delivery?.track_code ? `${pickupUrl()}/track/${delivery.track_code}` : "";
@@ -53,8 +56,25 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
         <section className="card card-pad card-mint tx-action fade-up" aria-labelledby="send-title">
           <h2 id="send-title" className="section-title">{t("Payment has been secured")}</h2>
           <p style={{ fontSize: 14.5, margin: "2px 0 0", color: "var(--emerald-press)" }}>
-            {t("We're finding a free Zola rider near {branch}. Their name and number will appear here, and we'll notify you. Don't send the parcel until then.", { branch: `${branch.agency}, ${branch.name}` })}
+            {sameCity
+              ? t("We're finding a free Zola rider near your pickup spot. Their name and number will appear here, and we'll notify you.")
+              : t("We're finding a free Zola rider near {branch}. Their name and number will appear here, and we'll notify you. Don't send the parcel until then.", { branch: `${branch.agency}, ${branch.name}` })}
           </p>
+        </section>
+      );
+    }
+    if (sameCity) {
+      return (
+        <section className="card card-pad card-mint tx-action fade-up" aria-labelledby="send-title">
+          <h2 id="send-title" className="section-title">{t("Your Zola rider is coming")}</h2>
+          <p style={{ fontSize: 14.5, margin: "2px 0 14px", color: "var(--emerald-press)" }}>
+            {t("The buyer has paid. Have the parcel packed and ready at your pickup spot: {spot}. Hand it over only to this rider.", { spot: origin?.label || "" })}
+          </p>
+          <div className="pk-recipient">
+            <div><p className="label">{t("Rider")}</p><p className="pk-big">{delivery.rider_name}</p></div>
+            <div><p className="label">{t("Rider's phone")}</p><p className="pk-big num">{prettyPhone(delivery.rider_phone)}</p></div>
+          </div>
+          <p className="hint" style={{ marginTop: 10 }}>{t("The rider checks it against the description, takes it, and you'll see it move to Shipped.")}</p>
         </section>
       );
     }
@@ -89,7 +109,7 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
         <h2 id="delivery-title" className="section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}><Bike size={17} /> {t("Delivery by Pickup")}</h2>
         <span className="pk-tag" style={{ marginBottom: 0 }}>{label}</span>
       </div>
-      <div className="kv"><span>{t("Agency branch")}</span><span style={{ textAlign: "right" }}>{branch.agency}, {branch.name} ({branch.city})</span></div>
+      <div className="kv"><span>{sameCity ? t("Collected from") : t("Agency branch")}</span><span style={{ textAlign: "right" }}>{fromText}</span></div>
       {delivery?.rider_name && <div className="kv"><span>{t("Rider")}</span><span>{delivery.rider_name}{delivery.rider_phone ? `, ${prettyPhone(delivery.rider_phone)}` : ""}</span></div>}
       {delivery?.receipt_no && <div className="kv"><span>{t("Agency receipt")}</span><span className="num">{delivery.receipt_no}</span></div>}
       {delivery?.delivered_at && <div className="kv"><span>{t("Delivered")}</span><span suppressHydrationWarning>{fmtDateTime(delivery.delivered_at, lang)}</span></div>}
@@ -112,7 +132,7 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
           <hr className="divider" />
           <p className="label" style={{ marginBottom: 4 }}>{t("Where should the rider bring it?")}</p>
           {delivery.dest && !editSpot ? (
-            <p className="hint">{delivery.dest.landmark} <button className="link-btn" onClick={() => setEditSpot(true)}>{t("Change")}</button></p>
+            <p className="hint">{delivery.dest.landmark}</p>
           ) : (
             <DeliverySpot tradeId={trade.id} initial={delivery.dest} onSaved={() => { setEditSpot(false); onChange(); }} />
           )}
@@ -137,7 +157,7 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
                   <button className="btn btn-secondary btn-sm" disabled={!pick} onClick={() => admin("assign", pick)}><UserCheck size={15} /> Assign</button>
                 </div>
               )}
-              {cands && cands.length === 0 && <p className="hint">No free rider in {branch.city} can carry this right now (free, available, and with enough balance).</p>}
+              {cands && cands.length === 0 && <p className="hint">No free rider in {origin?.city} can carry this right now (free, available, and with enough balance).</p>}
             </div>
           )}
           {msg && <p role="alert" className="hint-error" style={{ marginTop: 8 }}>{msg}</p>}

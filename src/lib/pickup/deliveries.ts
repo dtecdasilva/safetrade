@@ -20,8 +20,9 @@ import { sendEmail, emailLayout } from "@/lib/mail";
 import { sendNotifications, ADMIN_AUDIENCE } from "@/lib/notifications";
 import { prettyPhone, siteUrl } from "@/lib/support";
 import {
-  LOCATION_FRESH_MINUTES, Point, distanceKm, isPoint, maxPackageValue, pickupUrl, riderPayFor,
+  LOCATION_FRESH_MINUTES, Origin, Point, branchOrigin, distanceKm, isPoint, maxPackageValue, originOf, pickupUrl, riderPayFor,
 } from "@/lib/pickup/config";
+import { getPickupSettings } from "@/lib/pickup/settings";
 
 const fcfa = (n: unknown) => `FCFA ${(Number(n) || 0).toLocaleString("en-US")}`;
 const nowIso = () => new Date().toISOString();
@@ -63,6 +64,24 @@ export async function branchSnapshot(db: any, branchId: unknown) {
   return { id: b.id, agency: b.agency, name: b.name, city: b.city, address: b.address || "", lat: Number(b.lat), lng: Number(b.lng) };
 }
 
+/** Where the rider collects a Zola transaction's parcel: the seller's spot (same city) or the agency branch. */
+export function tradeOrigin(trade: any): Origin | null {
+  if (trade?.origin && isPoint(trade.origin)) return trade.origin;
+  if (trade?.dest_branch && isPoint(trade.dest_branch)) return branchOrigin(trade.dest_branch);
+  return null;
+}
+
+/** A Zola transaction delivered by Pickup (goods, with a pickup spot or an agency branch). */
+export function isPickupTrade(trade: any): boolean {
+  return goodsOf(trade) && !!tradeOrigin(trade);
+}
+
+/** "Touristique Express, Akwa (Douala)" or "Bonamoussadi (Douala)". */
+export function originText(o: Origin | null): string {
+  if (!o) return "";
+  return `${o.label} (${o.city})`;
+}
+
 export function branchLabel(b: any): string {
   if (!b) return "";
   return `${b.agency}, ${b.name} (${b.city})`;
@@ -101,7 +120,9 @@ export async function startDelivery(tradeId: string): Promise<void> {
     const tDoc = await db.collection("trades").doc(tradeId).get();
     if (!tDoc.exists) return;
     const trade = tDoc.data();
-    if (!trade.dest_branch || !goodsOf(trade)) return;
+    const origin = tradeOrigin(trade);
+    if (!origin || !goodsOf(trade)) return;
+    const settings = await getPickupSettings(db);
 
     const ref = db.collection("deliveries").doc(tradeId);
     if ((await ref.get()).exists) return;
@@ -117,11 +138,16 @@ export async function startDelivery(tradeId: string): Promise<void> {
       track_code: trackCode(),
       handover_code: handoverCode(),
       status: "waiting_rider",
-      branch: trade.dest_branch,
-      city: trade.dest_branch.city,
+      kind: "zola",
+      mode: trade.delivery_mode || (trade.dest_branch ? "out_of_town" : "same_city"),
+      origin,
+      ...(trade.dest_branch ? { branch: trade.dest_branch } : {}),
+      city: origin.city,
       title: trade.title,
       amount: Number(trade.amount) || 0,
-      rider_pay: riderPayFor(trade),
+      fee: Number(trade.delivery_fee) || 0,
+      km: Number(trade.delivery_km) || 0,
+      rider_pay: riderPayFor(trade, settings.rider_share),
       buyer_name: trade.buyer_name,
       buyer_phone: b.phone || trade.buyer_phone || "",
       seller_name: trade.vendor_name,
@@ -148,12 +174,14 @@ export interface Candidate { rider: any; km: number | null }
 /** Riders who could take this delivery right now, best first. */
 export async function candidatesFor(db: any, d: any): Promise<Candidate[]> {
   const snap = await db.collection("riders").where("status", "==", "approved").get();
-  const branch: Point = { lat: Number(d.branch.lat), lng: Number(d.branch.lng) };
+  const o = originOf(d);
+  if (!o) return [];
+  const branch: Point = { lat: Number(o.lat), lng: Number(o.lng) };
   const out: Candidate[] = [];
   for (const doc of snap.docs) {
     const r = doc.data();
     if (!r.available) continue;                                   // switched off
-    if (!sameCity(r.city, d.branch.city)) continue;              // another city
+    if (!sameCity(r.city, o.city)) continue;                      // another city
     if (r.active_trade) continue;                                 // already has a package
     if ((d.declined || []).includes(r.id)) continue;              // said no to this one
     if (maxPackageValue(r.balance) < Number(d.amount)) continue;  // balance too low for its value
@@ -168,7 +196,7 @@ export async function candidatesFor(db: any, d: any): Promise<Candidate[]> {
  * Give the delivery to the best free rider (or to `riderId` when the admin
  * picks one). Returns the rider, or null if it has to wait.
  */
-export async function assignRider(db: any, tradeId: string, opts: { riderId?: string; by?: string } = {}): Promise<any | null> {
+export async function assignRider(db: any, tradeId: string, opts: { riderId?: string; by?: string; prefer?: string } = {}): Promise<any | null> {
   const dRef = db.collection("deliveries").doc(tradeId);
   const dDoc = await dRef.get();
   if (!dDoc.exists) return null;
@@ -187,6 +215,9 @@ export async function assignRider(db: any, tradeId: string, opts: { riderId?: st
     list = [r];
   } else {
     list = (await candidatesFor(db, d)).map((c) => c.rider);
+    // The admin chose a rider when creating it: try them first, if they are free and can carry it
+    const prefer = opts.prefer || d.preferred_rider;
+    if (prefer) list = [...list.filter((r) => r.id === prefer), ...list.filter((r) => r.id !== prefer)];
   }
 
   for (const r of list) {
@@ -222,9 +253,9 @@ export async function assignRider(db: any, tradeId: string, opts: { riderId?: st
   if (d.status !== "waiting_rider" || !d.waiting_notified) {
     await dRef.update({ status: "waiting_rider", waiting_notified: true, updated_at: nowIso() });
     await sendNotifications([{
-      userId: ADMIN_AUDIENCE, tone: "warn", link: `/trade/${tradeId}`, tradeId, subject: d.title,
+      userId: ADMIN_AUDIENCE, tone: "warn", link: d.trade_id ? `/trade/${tradeId}` : "/admin?tab=deliveries", ...(d.trade_id ? { tradeId } : {}), subject: d.title,
       title: "No rider free yet",
-      body: `No available rider in ${d.branch.city} can take “${d.title}” (${fcfa(d.amount)}) right now. Pickup offers it again as soon as a rider is free, or you can assign one from the transaction page.`,
+      body: `No available rider in ${originOf(d)?.city || d.city} can take “${d.title}” (${fcfa(d.amount)}) right now. Pickup offers it again as soon as a rider is free, or you can assign one from ${d.trade_id ? "the transaction page" : "Admin, Deliveries"}.`,
     }]);
   }
   return null;
@@ -235,7 +266,7 @@ export async function retryWaiting(db: any, city?: string): Promise<number> {
   try {
     const snap = await db.collection("deliveries").where("status", "==", "waiting_rider").get();
     const waiting = snap.docs.map((d: any) => d.data())
-      .filter((d: any) => !city || sameCity(d.branch?.city, city))
+      .filter((d: any) => !city || sameCity(originOf(d)?.city, city))
       .sort((a: any, b: any) => (a.created_at > b.created_at ? 1 : -1));
     let n = 0;
     for (const d of waiting) if (await assignRider(db, d.id)) n++;
@@ -257,46 +288,83 @@ export async function releaseRider(db: any, riderId: string, tradeId: string) {
 
 /* ── Telling people ──────────────────────────────────────────────────────── */
 
+/** Email someone who booked a delivery directly on Pickup (no Zola account). */
+async function emailSender(d: any, subjectEn: string, subjectFr: string, introEn: string, introFr: string, rows: [string, string][] = []) {
+  const to = d.sender?.email;
+  if (!to) return;
+  const fr = d.lang === "fr";
+  const url = `${pickupUrl()}/d/${d.id}?k=${d.manage_key}`;
+  await sendEmail({
+    to,
+    subject: `Pickup: ${fr ? subjectFr : subjectEn}`,
+    text: `${fr ? introFr : introEn}\n\n${rows.map(([k, v]) => `${k}: ${v}`).join("\n")}\n\n${fr ? "Suivre la livraison" : "Follow the delivery"}: ${url}`,
+    html: emailLayout({ lang: fr ? "fr" : "en", heading: fr ? subjectFr : subjectEn, intro: fr ? introFr : introEn, rows,
+      cta: { label: fr ? "Suivre la livraison" : "Follow the delivery", url } }),
+  }).catch(() => {});
+}
+
 async function onAssigned(db: any, d: any, rider: any) {
-  const tDoc = await db.collection("trades").doc(d.trade_id).get();
-  const trade = tDoc.data() || {};
+  const o = originOf(d)!;
   const b = d.branch;
   const phone = prettyPhone(rider.phone);
-  await tradeEvent(db, d.trade_id, "Rider assigned", `${rider.name} (Pickup) will collect the parcel at ${b.agency}, ${b.name} branch, ${b.city}.`, "info");
+  const sameCityMode = d.mode === "same_city";
 
-  await sendNotifications([
-    { userId: trade.vendor_id, tone: "success", link: `/trade/${d.trade_id}`, tradeId: d.trade_id, subject: d.title,
-      title: `Send “${d.title}” to ${rider.name}`,
-      body: `Send the parcel through ${b.agency} to the ${b.name} branch in ${b.city}. Write this recipient on it: ${rider.name}, ${phone}. Then enter the agency receipt number on the transaction.`,
-      title_fr: `Envoyez « ${d.title} » à ${rider.name}`,
-      body_fr: `Envoyez le colis par ${b.agency} à l'agence de ${b.name}, ${b.city}. Écrivez ce destinataire dessus : ${rider.name}, ${phone}. Ensuite, indiquez le numéro du reçu de l'agence sur la transaction.` },
-    { userId: trade.buyer_id, tone: "info", link: `/trade/${d.trade_id}`, tradeId: d.trade_id, subject: d.title, email: false,
-      title: "A rider will bring your order",
-      body: `${rider.name} from Pickup will collect “${d.title}” at ${b.agency} (${b.name}) and bring it to you. You can follow it on a map from the transaction page.`,
-      title_fr: "Un livreur vous apportera votre commande",
-      body_fr: `${rider.name}, de Pickup, récupérera « ${d.title} » chez ${b.agency} (${b.name}) et vous l'apportera. Vous pourrez la suivre sur une carte depuis la page de la transaction.` },
-  ]);
+  if (d.trade_id) {
+    const trade = (await db.collection("trades").doc(d.trade_id).get()).data() || {};
+    await tradeEvent(db, d.trade_id, "Rider assigned", sameCityMode
+      ? `${rider.name} (Pickup) will collect the parcel from the seller in ${o.city}.`
+      : `${rider.name} (Pickup) will collect the parcel at ${b.agency}, ${b.name} branch, ${b.city}.`, "info");
+    await sendNotifications([
+      sameCityMode
+        ? { userId: trade.vendor_id, tone: "success", link: `/trade/${d.trade_id}`, tradeId: d.trade_id, subject: d.title,
+            title: `${rider.name} will collect “${d.title}”`,
+            body: `${rider.name} (${phone}) from Pickup is coming to your pickup spot to collect the parcel. Have it packed and ready, and hand it over only to this rider.`,
+            title_fr: `${rider.name} va récupérer « ${d.title} »`,
+            body_fr: `${rider.name} (${phone}), de Pickup, vient à votre point de retrait pour récupérer le colis. Préparez-le et remettez-le uniquement à ce livreur.` }
+        : { userId: trade.vendor_id, tone: "success", link: `/trade/${d.trade_id}`, tradeId: d.trade_id, subject: d.title,
+            title: `Send “${d.title}” to ${rider.name}`,
+            body: `Send the parcel through ${b.agency} to the ${b.name} branch in ${b.city}. Write this recipient on it: ${rider.name}, ${phone}. Then enter the agency receipt number on the transaction.`,
+            title_fr: `Envoyez « ${d.title} » à ${rider.name}`,
+            body_fr: `Envoyez le colis par ${b.agency} à l'agence de ${b.name}, ${b.city}. Écrivez ce destinataire dessus : ${rider.name}, ${phone}. Ensuite, indiquez le numéro du reçu de l'agence sur la transaction.` },
+      { userId: trade.buyer_id, tone: "info", link: `/trade/${d.trade_id}`, tradeId: d.trade_id, subject: d.title, email: false,
+        title: "A rider will bring your order",
+        body: `${rider.name} from Pickup will collect “${d.title}” and bring it to you. You can follow it on a map from the transaction page.`,
+        title_fr: "Un livreur vous apportera votre commande",
+        body_fr: `${rider.name}, de Pickup, récupérera « ${d.title} » et vous l'apportera. Vous pourrez la suivre sur une carte depuis la page de la transaction.` },
+    ]);
+  } else {
+    await emailSender(d,
+      sameCityMode ? `${rider.name} is coming to collect your parcel` : `Send your parcel to ${rider.name}`,
+      sameCityMode ? `${rider.name} vient récupérer votre colis` : `Envoyez votre colis à ${rider.name}`,
+      sameCityMode
+        ? `${rider.name} (${phone}) is coming to collect "${d.title}". Hand it over only to this rider.`
+        : `Send "${d.title}" through ${b.agency} to the ${b.name} branch in ${b.city}, with this recipient: ${rider.name}, ${phone}. Then enter the receipt number on your delivery page.`,
+      sameCityMode
+        ? `${rider.name} (${phone}) vient récupérer « ${d.title} ». Remettez-le uniquement à ce livreur.`
+        : `Envoyez « ${d.title} » par ${b.agency} à l'agence de ${b.name}, ${b.city}, avec ce destinataire : ${rider.name}, ${phone}. Ensuite, indiquez le numéro du reçu sur votre page de livraison.`);
+  }
 
   // The rider: email, in their language (they also see it in the Pickup app)
   if (rider.email) {
     const fr = rider.lang === "fr";
     const url = `${pickupUrl()}/app`;
+    const where = sameCityMode ? `${o.label}, ${o.city}` : `${b.agency}, ${b.name}, ${b.city}`;
     await sendEmail({
       to: rider.email,
-      subject: fr ? `Pickup : nouvelle livraison à ${b.city}` : `Pickup: new delivery in ${b.city}`,
+      subject: fr ? `Pickup : nouvelle livraison à ${o.city}` : `Pickup: new delivery in ${o.city}`,
       text: fr
-        ? `Bonjour ${rider.name},\n\nUne livraison vous a été attribuée : « ${d.title} », valeur ${fcfa(d.amount)}.\nÀ récupérer chez ${b.agency}, agence de ${b.name}, ${b.city}.\nLe vendeur va envoyer le colis à votre nom.\n\nOuvrir Pickup : ${url}`
-        : `Hi ${rider.name},\n\nYou have a new delivery: "${d.title}", worth ${fcfa(d.amount)}.\nCollect it at ${b.agency}, ${b.name} branch, ${b.city}.\nThe seller is sending the parcel in your name.\n\nOpen Pickup: ${url}`,
+        ? `Bonjour ${rider.name},\n\nUne livraison vous a été attribuée : « ${d.title} », valeur ${fcfa(d.amount)}.\nÀ récupérer : ${where}.\n\nOuvrir Pickup : ${url}`
+        : `Hi ${rider.name},\n\nYou have a new delivery: "${d.title}", worth ${fcfa(d.amount)}.\nCollect it at: ${where}.\n\nOpen Pickup: ${url}`,
       html: emailLayout({
         lang: fr ? "fr" : "en",
         heading: fr ? "Nouvelle livraison pour vous" : "You have a new delivery",
-        intro: fr
-          ? `Le vendeur va envoyer ce colis à votre nom par ${b.agency}. Nous vous dirons quand il est parti.`
-          : `The seller is sending this parcel in your name through ${b.agency}. We'll tell you when it has left.`,
+        intro: sameCityMode
+          ? (fr ? "Allez récupérer le colis auprès de l'expéditeur, puis livrez-le." : "Go and collect the parcel from the sender, then deliver it.")
+          : (fr ? `Le colis est envoyé à votre nom par ${b.agency}. Nous vous dirons quand il est parti.` : `The parcel is being sent in your name through ${b.agency}. We'll tell you when it has left.`),
         rows: [
           [fr ? "Colis" : "Parcel", d.title],
           [fr ? "Valeur" : "Value", fcfa(d.amount)],
-          [fr ? "À récupérer" : "Collect at", `${b.agency}, ${b.name}, ${b.city}`],
+          [fr ? "À récupérer" : "Collect at", where],
           [fr ? "Vous gagnez" : "You earn", fcfa(d.rider_pay)],
         ],
         cta: { label: fr ? "Ouvrir Pickup" : "Open Pickup", url },
@@ -305,27 +373,27 @@ async function onAssigned(db: any, d: any, rider: any) {
   }
 }
 
-/** The seller sent the parcel through the agency. */
-export async function markSent(db: any, tradeId: string, receipt: string) {
-  const ref = db.collection("deliveries").doc(tradeId);
+/** The sender sent the parcel through the agency (out of town). */
+export async function markSent(db: any, deliveryId: string, receipt: string) {
+  const ref = db.collection("deliveries").doc(deliveryId);
   const d = (await ref.get()).data();
   if (!d || d.status !== "assigned") return;
   await ref.update({ status: "sent", receipt_no: receipt, sent_at: nowIso(), history: history(d, "sent"), updated_at: nowIso() });
   const r = (await db.collection("riders").doc(d.rider_id).get()).data();
-  if (r?.email) {
+  if (r?.email && d.branch) {
     const fr = r.lang === "fr";
     await sendEmail({
       to: r.email,
       subject: fr ? `Pickup : le colis « ${d.title} » est parti` : `Pickup: "${d.title}" is on its way`,
       text: fr
-        ? `Le vendeur a envoyé le colis par ${d.branch.agency}. Reçu : ${receipt}. Récupérez-le à l'agence de ${d.branch.name} dès son arrivée.\n\n${pickupUrl()}/app`
-        : `The seller sent the parcel through ${d.branch.agency}. Receipt: ${receipt}. Collect it at the ${d.branch.name} branch as soon as it arrives.\n\n${pickupUrl()}/app`,
+        ? `L'expéditeur a envoyé le colis par ${d.branch.agency}. Reçu : ${receipt}. Récupérez-le à l'agence de ${d.branch.name} dès son arrivée.\n\n${pickupUrl()}/app`
+        : `The sender sent the parcel through ${d.branch.agency}. Receipt: ${receipt}. Collect it at the ${d.branch.name} branch as soon as it arrives.\n\n${pickupUrl()}/app`,
       html: emailLayout({
         lang: fr ? "fr" : "en",
         heading: fr ? "Le colis est en route" : "The parcel is on its way",
         intro: fr
-          ? `Le vendeur a envoyé « ${d.title} » par ${d.branch.agency}. Récupérez-le à l'agence de ${d.branch.name} dès son arrivée.`
-          : `The seller sent "${d.title}" through ${d.branch.agency}. Collect it at the ${d.branch.name} branch as soon as it arrives.`,
+          ? `« ${d.title} » a été envoyé par ${d.branch.agency}. Récupérez-le à l'agence de ${d.branch.name} dès son arrivée.`
+          : `"${d.title}" was sent through ${d.branch.agency}. Collect it at the ${d.branch.name} branch as soon as it arrives.`,
         rows: [[fr ? "Reçu de l'agence" : "Agency receipt", receipt]],
         cta: { label: fr ? "Ouvrir Pickup" : "Open Pickup", url: `${pickupUrl()}/app` },
       }),
@@ -339,8 +407,19 @@ export function trackUrl(code: string): string {
 }
 
 export async function notifyCollected(db: any, d: any) {
+  const o = originOf(d);
+  if (!d.trade_id) {
+    await emailSender(d, "Your parcel is with the rider", "Votre colis est avec le livreur",
+      `${d.rider_name} has collected "${d.title}" and is taking it to ${d.buyer_name}. Follow it on the map: ${trackUrl(d.track_code)}`,
+      `${d.rider_name} a récupéré « ${d.title} » et l'apporte à ${d.buyer_name}. Suivez-le sur la carte : ${trackUrl(d.track_code)}`);
+    return;
+  }
   const trade = (await db.collection("trades").doc(d.trade_id).get()).data() || {};
-  await tradeEvent(db, d.trade_id, "Collected by the rider", `${d.rider_name} collected the parcel at ${d.branch.agency} and is bringing it to the buyer.`, "info");
+  // Same city: the rider collected it from the seller, so the order is now on its way
+  if (trade.status === "funds_held") {
+    await db.collection("trades").doc(d.trade_id).update({ status: "shipped", updated_at: nowIso() });
+  }
+  await tradeEvent(db, d.trade_id, "Collected by the rider", `${d.rider_name} collected the parcel at ${o?.label || "the pickup point"} and is bringing it to the buyer.`, "info");
   await sendNotifications([
     { userId: trade.buyer_id, tone: "success", link: `/trade/${d.trade_id}`, tradeId: d.trade_id, subject: d.title,
       title: "Your parcel is with the rider",
@@ -349,13 +428,19 @@ export async function notifyCollected(db: any, d: any) {
       body_fr: `${d.rider_name} a récupéré « ${d.title} » et vous l'apporte. Suivez-le sur la carte : ${trackUrl(d.track_code)}. Ne donnez votre code de livraison qu'après avoir vérifié votre commande.` },
     { userId: trade.vendor_id, tone: "info", link: `/trade/${d.trade_id}`, tradeId: d.trade_id, email: false,
       title: "The rider has your parcel",
-      body: `${d.rider_name} collected “${d.title}” at the agency and is delivering it to the buyer.`,
+      body: `${d.rider_name} collected “${d.title}” and is delivering it to the buyer.`,
       title_fr: "Le livreur a votre colis",
-      body_fr: `${d.rider_name} a récupéré « ${d.title} » à l'agence et le livre à l'acheteur.` },
+      body_fr: `${d.rider_name} a récupéré « ${d.title} » et le livre à l'acheteur.` },
   ]);
 }
 
 export async function notifyDelivered(db: any, d: any) {
+  if (!d.trade_id) {
+    await emailSender(d, "Your parcel was delivered", "Votre colis a été livré",
+      `${d.rider_name} handed "${d.title}" to ${d.buyer_name}, who gave the delivery code.`,
+      `${d.rider_name} a remis « ${d.title} » à ${d.buyer_name}, qui a donné le code de livraison.`);
+    return;
+  }
   const trade = (await db.collection("trades").doc(d.trade_id).get()).data() || {};
   await tradeEvent(db, d.trade_id, "Delivered by the rider", `${d.rider_name} handed the parcel to the buyer, who gave the delivery code.`, "success");
   await sendNotifications([
@@ -376,7 +461,7 @@ export async function notifyDelivered(db: any, d: any) {
 export function deliveryForViewer(d: any, viewer: "buyer" | "seller" | "admin") {
   if (!d) return null;
   const base = {
-    status: d.status, branch: d.branch, track_code: d.track_code,
+    status: d.status, branch: d.branch || null, origin: originOf(d), mode: d.mode || (d.branch ? "out_of_town" : "same_city"), track_code: d.track_code,
     rider_name: d.rider_name || "", receipt_no: d.receipt_no || "",
     assigned_at: d.assigned_at || "", sent_at: d.sent_at || "", collected_at: d.collected_at || "", delivered_at: d.delivered_at || "",
   };

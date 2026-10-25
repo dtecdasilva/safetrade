@@ -13,7 +13,7 @@ import { reviewLabel, reviewState } from "@/lib/review";
 export default function AdminPage() {
   const router = useRouter();
   const [user, setUser]                     = useState<any>(null);
-  const [tab, setTab]                       = useState<"trades"|"users"|"withdrawals"|"reports"|"riders"|"agencies">("trades");
+  const [tab, setTab]                       = useState<"trades"|"users"|"withdrawals"|"reports"|"riders"|"agencies"|"deliveries">("trades");
   const [reports, setReports]               = useState<any[]>([]);
   const [sellers, setSellers]               = useState<Record<string, any>>({});
   const [flagFor, setFlagFor]               = useState<{ id: string; name: string } | null>(null);
@@ -47,7 +47,7 @@ export default function AdminPage() {
   // Links from emails can open a tab directly: /admin?tab=reports
   useEffect(() => {
     const want = new URLSearchParams(window.location.search).get("tab");
-    if (want === "reports" || want === "users" || want === "withdrawals" || want === "riders" || want === "agencies") setTab(want);
+    if (want === "reports" || want === "users" || want === "withdrawals" || want === "riders" || want === "agencies" || want === "deliveries") setTab(want);
   }, []);
 
   async function setFlag(userId: string, flagged: boolean, note = "") {
@@ -115,6 +115,7 @@ export default function AdminPage() {
     { key: "users" as const,       label: `Users (${users.length})` },
     { key: "withdrawals" as const, label: `Withdrawals${pendingW.length > 0 ? ` (${pendingW.length})` : ""}` },
     { key: "reports" as const,     label: `Reports${openReports.length > 0 ? ` (${openReports.length})` : ""}` },
+    { key: "deliveries" as const,  label: "Deliveries" },
     { key: "riders" as const,      label: "Riders" },
     { key: "agencies" as const,    label: "Agencies" },
   ];
@@ -238,7 +239,7 @@ export default function AdminPage() {
         )}
 
         {/* ── PICKUP: riders and agency branches ── */}
-        {(tab === "riders" || tab === "agencies") && <AdminPickup tab={tab} />}
+        {(tab === "riders" || tab === "agencies" || tab === "deliveries") && <AdminPickup tab={tab} />}
 
         {/* ── REPORTS ── */}
         {tab === "reports" && (

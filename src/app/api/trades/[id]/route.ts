@@ -4,7 +4,9 @@ import { getSession } from "@/lib/auth";
 import { notifyTradeMove } from "@/lib/notifications";
 import { quote } from "@/lib/fees";
 import { canReportSeller, reportId } from "@/lib/reports";
-import { branchSnapshot, deliveryForViewer } from "@/lib/pickup/deliveries";
+import { branchSnapshot, deliveryForViewer, tradeOrigin } from "@/lib/pickup/deliveries";
+import { pickupPrice, tradeDest } from "@/lib/pickup/tradeDelivery";
+import { branchOrigin } from "@/lib/pickup/config";
 
 /** Once the buyer has paid, the agreement is fixed for both sides. */
 const PAID_LOCK = "The buyer has already paid, so this transaction can no longer be changed. If something needs fixing, contact Zola customer service.";
@@ -108,7 +110,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     // Step 5: the Pickup delivery, showing each side only what they need
     let delivery: any = null;
-    if (trade.dest_branch) {
+    if (trade.dest_branch || trade.origin) {
       try {
         const d = (await db.collection("deliveries").doc(params.id).get()).data();
         const viewer = session.role === "admin" ? "admin" : trade.vendor_id === session.id ? "seller" : "buyer";
@@ -157,14 +159,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Older transactions with no delivery fee stay without one.
     const hadDelivery  = trade.needs_delivery !== undefined ? trade.needs_delivery !== false : Number(trade.delivery_fee) > 0;
     const withDelivery = needsDelivery === undefined ? hadDelivery : needsDelivery !== false;
-    const { fee, deliveryFee, total: buyerTotal } = quote(Number(amount), withDelivery);
-
     // Changing the agency branch (sellers, before payment)
     const newBranch = withDelivery && destBranchId ? await branchSnapshot(db, destBranchId) : null;
 
+    // Pickup transactions: the delivery fee comes from the distance to the buyer's spot
+    const origin = withDelivery ? (newBranch ? branchOrigin(newBranch) : tradeOrigin(trade)) : null;
+    const priced = origin ? await pickupPrice(db, Number(amount), origin, tradeDest(trade)) : null;
+    const flat = quote(Number(amount), withDelivery);
+    const fee = flat.fee;
+    const deliveryFee = priced ? priced.delivery_fee : flat.deliveryFee;
+    const buyerTotal = priced ? priced.buyer_total : flat.total;
+
     await db.collection("trades").doc(params.id).update({
-      ...(newBranch ? { dest_branch: newBranch } : {}),
-      ...(!withDelivery ? { dest_branch: null } : {}),
+      ...(newBranch ? { dest_branch: newBranch, origin: branchOrigin(newBranch), delivery_mode: "out_of_town" } : {}),
+      ...(!withDelivery ? { dest_branch: null, origin: null, delivery_mode: null, delivery_pending: false } : {}),
+      ...(priced ? { delivery_km: priced.delivery_km, delivery_pending: priced.delivery_pending } : {}),
       title,
       description,
       amount: Number(amount),

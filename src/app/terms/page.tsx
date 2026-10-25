@@ -37,8 +37,8 @@ const EN: LegalSection[] = [
     ],
   ]},
   { title: "Fees", body: [
-    "Zola charges 8% of the item price, or 5% when the item costs more than FCFA 50,000. Standard delivery costs FCFA 1,000. Both are paid by the buyer, on top of the item price, and are shown before payment. The seller receives the full item price.",
-    "If an item costs more than FCFA 1,000 to deliver, the buyer pays the difference.",
+    "Zola charges 8% of the item price, or 5% when the item costs more than FCFA 50,000. Delivery is priced by distance, from where the rider collects the parcel to where it is delivered. Both are paid by the buyer, on top of the item price, and are shown before payment. The seller receives the full item price.",
+    "The buyer sees the delivery price, worked out from the distance, before paying. It does not change after payment.",
     "There is no delivery fee when the seller says there is nothing to deliver, such as a service.",
     "If a transaction is deleted or cancelled before payment, nothing is charged.",
   ]},
@@ -115,8 +115,8 @@ const FR: LegalSection[] = [
     ],
   ]},
   { title: "Frais", body: [
-    "Zola prend 8 % du prix de l'article, ou 5 % quand l'article coûte plus de FCFA 50,000. La livraison standard coûte FCFA 1,000. Ces deux montants sont payés par l'acheteur, en plus du prix de l'article, et affichés avant le paiement. Le vendeur reçoit la totalité du prix de l'article.",
-    "Si la livraison d'un article coûte plus de FCFA 1,000, l'acheteur paie la différence.",
+    "Zola prend 8 % du prix de l'article, ou 5 % quand l'article coûte plus de FCFA 50,000. La livraison est calculée selon la distance, du lieu où le livreur récupère le colis au lieu de livraison. Ces deux montants sont payés par l'acheteur, en plus du prix de l'article, et affichés avant le paiement. Le vendeur reçoit la totalité du prix de l'article.",
+    "L'acheteur voit le prix de la livraison, calculé selon la distance, avant de payer. Il ne change plus après le paiement.",
     "Aucun frais de livraison n'est ajouté quand le vendeur indique qu'il n'y a rien à livrer, par exemple pour un service.",
     "Si une transaction est supprimée ou annulée avant le paiement, rien n'est prélevé.",
   ]},
@@ -171,7 +171,7 @@ export default function TermsPage() {
   return (
     <LegalPage
       title={fr ? "Conditions d'utilisation" : "Terms of use"}
-      updated={fr ? "Mis à jour le 18 octobre 2026" : "Last updated 18 October 2026"}
+      updated={fr ? "Mis à jour le 25 octobre 2026" : "Last updated 25 October 2026"}
       intro={fr
         ? "Ces conditions expliquent comment fonctionne Zola et ce que chacun s'engage à faire. En créant un compte ou en utilisant Zola, vous les acceptez."
         : "These terms explain how Zola works and what each side agrees to. By creating an account or using Zola, you accept them."}

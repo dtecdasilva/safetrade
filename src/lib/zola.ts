@@ -202,7 +202,13 @@ export function statusStory(
     case "funds_held":
       return {
         where: isBuyer ? t("Your payment is safely held by Zola.") : t("{held} is safely held by Zola.", { held }),
-        next: (trade as any).dest_branch && goods
+        next: (trade as any).delivery_mode === "same_city" && goods
+          ? (isBuyer
+              ? t("A Zola rider collects your order from the seller and brings it to you.")
+              : isSeller
+                ? t("Your Zola rider comes to collect it from you. Have it packed and ready.")
+                : t("The Pickup rider collects it from the seller."))
+          : (trade as any).dest_branch && goods
           ? (isBuyer
               ? t("The seller sends your order through a bus agency, and a Zola rider brings it to you.")
               : isSeller

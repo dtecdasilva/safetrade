@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getRider, publicRider, SIGNED_OUT } from "@/lib/pickup/auth";
-import { maxPackageValue } from "@/lib/pickup/config";
+import { maxPackageValue, originOf } from "@/lib/pickup/config";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,10 @@ export async function GET() {
         const withBuyer = d.status === "collected";
         job = {
           trade_id: d.trade_id, status: d.status, title: d.title, amount: d.amount, rider_pay: d.rider_pay,
-          branch: d.branch, receipt_no: d.receipt_no || "", seller_name: d.seller_name,
+          branch: d.branch || null, origin: originOf(d), mode: d.mode || (d.branch ? "out_of_town" : "same_city"),
+          receipt_no: d.receipt_no || "", seller_name: d.seller_name,
+          // Same city: the rider calls the seller to collect it
+          seller_phone: (d.mode === "same_city") ? d.seller_phone || "" : "",
           assigned_at: d.assigned_at, sent_at: d.sent_at || "", collected_at: d.collected_at || "",
           buyer_name: d.buyer_name,
           buyer_phone: withBuyer ? d.buyer_phone : "",
@@ -43,7 +46,7 @@ export async function GET() {
     const withdrawals = wSnap.docs.map((d: any) => d.data()).sort(byDate).slice(0, 10);
     const done = doneSnap.docs.map((d: any) => d.data()).filter((d: any) => d.status === "delivered")
       .sort((a: any, b: any) => (b.delivered_at > a.delivered_at ? 1 : -1)).slice(0, 10)
-      .map((d: any) => ({ trade_id: d.trade_id, title: d.title, delivered_at: d.delivered_at, rider_pay: d.rider_pay, city: d.branch?.city }));
+      .map((d: any) => ({ trade_id: d.trade_id, title: d.title, delivered_at: d.delivered_at, rider_pay: d.rider_pay, city: originOf(d)?.city || d.city }));
 
     return NextResponse.json({ rider: publicRider(rider), maxValue: maxPackageValue(rider.balance), job, ledger, withdrawals, done });
   } catch (e: any) {

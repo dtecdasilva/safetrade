@@ -3,7 +3,8 @@ import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { notifyTradeMove } from "@/lib/notifications";
-import { startDelivery, markSent, branchSnapshot } from "@/lib/pickup/deliveries";
+import { startDelivery, markSent } from "@/lib/pickup/deliveries";
+import { originFromBody, pickupOn, pickupPrice, tradeDest } from "@/lib/pickup/tradeDelivery";
 import { COMPLAINT_MAX, COMPLAINT_MIN, REVIEW_HOURS, reviewEnd, reviewState } from "@/lib/review";
 import {
   notifyBuyerTradeCreated,
@@ -18,7 +19,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
 
-    const { action, trackingNumber, reason, destBranchId } = await req.json();
+    const body = await req.json();
+    const { action, trackingNumber, reason } = body;
     const db = getDb();
 
     const tradeDoc = await db.collection("trades").doc(params.id).get();
@@ -54,12 +56,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           return NextResponse.json({ error: "Only the seller can confirm this transaction" }, { status: 403 });
         if (trade.status !== "awaiting_seller")
           return NextResponse.json({ error: "This transaction isn't waiting for your confirmation" }, { status: 400 });
-        // Goods: the seller says which agency branch they will send it to
+        // Goods: the seller says how it travels (same city: their pickup spot; another city: an agency branch)
         const goodsToSend = trade.needs_delivery !== false;
-        const branch = goodsToSend ? await branchSnapshot(db, destBranchId) : null;
-        if (goodsToSend && !branch && (await db.collection("agency_branches").where("active", "==", true).limit(1).get()).size > 0)
-          return NextResponse.json({ error: "Choose the agency branch you will send it to" }, { status: 400 });
-        await updateTrade({ status: "pending_payment", seller_confirmed_at: new Date().toISOString(), ...(branch ? { dest_branch: branch } : {}) });
+        const usePickup = goodsToSend && (await pickupOn(db));
+        const choice: any = usePickup ? await originFromBody(db, body) : {};
+        if (usePickup && choice.error) return NextResponse.json({ error: choice.error }, { status: 400 });
+        const priced = usePickup ? await pickupPrice(db, Number(trade.amount), choice.origin, tradeDest(trade)) : null;
+        await updateTrade({
+          status: "pending_payment", seller_confirmed_at: new Date().toISOString(),
+          ...(usePickup ? { delivery_mode: choice.mode, origin: choice.origin, ...(choice.branch ? { dest_branch: choice.branch } : {}),
+            delivery_fee: priced!.delivery_fee, delivery_km: priced!.delivery_km, delivery_pending: priced!.delivery_pending, buyer_total: priced!.buyer_total } : {}),
+        });
+        if (choice.mode === "same_city") await db.collection("users").doc(session.id).update({ pickup_spot: choice.origin }).catch(() => {});
         await addEvent("Seller confirmed", `${session.name} confirmed the details. The buyer can now pay.`, "success");
         await notifyTradeMove("accepted", { ...(trade as any), id: params.id });
         // The approved "trade created" WhatsApp template fits: it asks the buyer to pay
@@ -122,6 +130,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
         // Sent through a bus agency to a Pickup rider: the rider must be known first,
         // and the agency receipt number is needed so the rider can collect it
+        // Same city: the rider collects it from the seller, nothing to send
+        if (goods && trade.delivery_mode === "same_city")
+          return NextResponse.json({ error: "Your Pickup rider collects this from you. Hand it over when they arrive." }, { status: 400 });
         const delivery = goods && trade.dest_branch ? (await db.collection("deliveries").doc(params.id).get()).data() : null;
         const receipt = String(trackingNumber || "").trim().slice(0, 60);
         if (delivery) {

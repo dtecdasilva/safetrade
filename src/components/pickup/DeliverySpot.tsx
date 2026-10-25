@@ -5,8 +5,8 @@ import { useT } from "@/components/I18n";
 import PickupMap from "@/components/pickup/Map";
 
 /** The buyer marks where the rider should bring the parcel. */
-export default function DeliverySpot({ tradeId, initial, onSaved }: {
-  tradeId: string; initial?: { lat: number; lng: number; landmark?: string } | null; onSaved?: () => void;
+export default function DeliverySpot({ tradeId, initial, onSaved, saveLabel }: {
+  tradeId: string; initial?: { lat: number; lng: number; landmark?: string } | null; onSaved?: () => void; saveLabel?: string;
 }) {
   const { t } = useT();
   const [spot, setSpot] = useState<{ lat: number; lng: number } | null>(initial ? { lat: initial.lat, lng: initial.lng } : null);
@@ -50,7 +50,7 @@ export default function DeliverySpot({ tradeId, initial, onSaved }: {
         <input id="landmark" className="input" maxLength={200} value={landmark} onChange={(e) => setLandmark(e.target.value)}
           placeholder={t("For example: behind Total Bonamoussadi, blue gate")} />
       </div>
-      <button className="btn btn-primary" disabled={busy || !spot || landmark.trim().length < 3} onClick={save}>{busy ? t("Saving...") : t("Save delivery spot")}</button>
+      <button className="btn btn-primary" disabled={busy || !spot || landmark.trim().length < 3} onClick={save}>{busy ? t("Saving...") : saveLabel || t("Save delivery spot")}</button>
       {err && <p role="alert" className="hint-error">{t(err)}</p>}
       {msg && <p role="status" className="hint" style={{ color: "var(--emerald-press)", fontWeight: 600 }}>{t(msg)}</p>}
     </div>

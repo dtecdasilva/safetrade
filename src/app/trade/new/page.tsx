@@ -9,7 +9,7 @@ import { money } from "@/lib/zola";
 import { quote, feePercentLabel, DELIVERY_FEE, DELIVERY_NOTE } from "@/lib/fees";
 import { handoverHow } from "@/lib/handover";
 import { useT } from "@/components/I18n";
-import BranchPicker from "@/components/pickup/BranchPicker";
+import OriginPicker, { OriginValue, originReady } from "@/components/pickup/OriginPicker";
 
 export default function NewTradePage() {
   const router = useRouter();
@@ -24,8 +24,9 @@ export default function NewTradePage() {
   const [buyerEmail, setBuyerEmail] = useState("");
   const emailRef = useRef<HTMLInputElement>(null);
   // Goods travel by bus agency to a Pickup rider in the buyer's city
-  const [branchId, setBranchId]       = useState("");
-  const [hasBranches, setHasBranches] = useState(false);
+  const [origin, setOrigin]           = useState<OriginValue>({ deliveryMode: "" });
+  const [hasBranches, setHasBranches] = useState(false); // Pickup is on
+  const [lastSpot, setLastSpot]       = useState<any>(null);
 
   useEffect(() => {
     fetch("/api/auth/me").then(r => r.json()).then(d => {
@@ -34,17 +35,22 @@ export default function NewTradePage() {
       setUser(d.user);
       // Sellers who said at signup that they only sell services start with delivery off
       if (d.user.role === "vendor") fetch("/api/profile").then(r => r.json()).then(p => {
+        if (p.profile?.pickup_spot) setLastSpot(p.profile.pickup_spot);
         if (p.profile?.sells === "services") setForm(f => ({ ...f, needsDelivery: false }));
       }).catch(() => {});
     });
   }, [router]);
 
   useEffect(() => { if (needEmail) emailRef.current?.focus(); }, [needEmail]);
+  // Is Pickup delivering? (Decides how delivery is priced, for buyers and sellers)
+  useEffect(() => { fetch("/api/pickup/cities").then(r => r.json()).then(d => setHasBranches(!!d.enabled)).catch(() => {}); }, []);
 
   // Someone who is buying starts the transaction; the seller confirms it before they pay
   const asBuyer    = user?.role === "buyer";
   const amount     = parseFloat(form.amount) || 0;
-  const { fee, deliveryFee, total: buyerTotal } = quote(amount, form.needsDelivery);
+  // With Pickup on, delivery is priced by distance later (not a flat fee)
+  const pickupOn = hasBranches;
+  const { fee, deliveryFee, total: buyerTotal } = quote(amount, form.needsDelivery && !pickupOn);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,7 +58,7 @@ export default function NewTradePage() {
     try {
       const res  = await fetch("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(asBuyer
         ? { title: form.title, description: form.description, amount, sellerPhone: form.buyerPhone, sellerEmail: needEmail ? buyerEmail : "", deliveryDays: parseInt(form.deliveryDays), needsDelivery: form.needsDelivery }
-        : { title: form.title, description: form.description, amount, buyerPhone: form.buyerPhone, buyerEmail: needEmail ? buyerEmail : "", deliveryDays: parseInt(form.deliveryDays), needsDelivery: form.needsDelivery, destBranchId: form.needsDelivery ? branchId : "" }) });
+        : { title: form.title, description: form.description, amount, buyerPhone: form.buyerPhone, buyerEmail: needEmail ? buyerEmail : "", deliveryDays: parseInt(form.deliveryDays), needsDelivery: form.needsDelivery, ...(form.needsDelivery ? origin : {}) }) });
       const data = await res.json();
       if (!res.ok) {
         // Not an error: this buyer simply needs an invitation
@@ -67,7 +73,7 @@ export default function NewTradePage() {
   if (!user) return <PageLoader />;
 
   const needBranch = !asBuyer && form.needsDelivery && hasBranches;
-  const valid = form.title && form.description.trim() && form.buyerPhone && amount > 0 && (!needEmail || buyerEmail.trim()) && (!needBranch || !!branchId);
+  const valid = form.title && form.description.trim() && form.buyerPhone && amount > 0 && (!needEmail || buyerEmail.trim()) && (!needBranch || originReady(origin));
 
   return (
     <div className="page">
@@ -119,14 +125,16 @@ export default function NewTradePage() {
               {form.needsDelivery && asBuyer ? (
                 <div className="notice notice-info" style={{ marginTop: 4 }}>
                   <ShieldCheck size={16} />
-                  <span>{t("The seller sends the item to Zola, and Zola delivers it to you. Standard delivery is {delivery}, paid by you.", { delivery: money(DELIVERY_FEE) })}</span>
+                  <span>{pickupOn
+                    ? t("A Zola rider brings it to you. The delivery price depends on the distance: you'll see it when you set where to deliver, before you pay.")
+                    : t("The seller sends the item to Zola, and Zola delivers it to you. Standard delivery is {delivery}, paid by you.", { delivery: money(DELIVERY_FEE) })}</span>
                 </div>
               ) : form.needsDelivery && hasBranches ? (
                 <div className="notice notice-info" style={{ marginTop: 4 }}>
                   <ShieldCheck size={16} />
                   <span>
-                    <strong style={{ color: "var(--navy)" }}>{t("You send it through a bus agency to a Zola rider, not straight to the buyer.")}</strong>{" "}
-                    {t("Choose the agency branch in the buyer's city. Once the buyer pays, we give you the rider's name and number to write on the parcel. The buyer pays the {delivery} delivery.", { delivery: money(DELIVERY_FEE) })}
+                    <strong style={{ color: "var(--navy)" }}>{t("A Zola rider delivers it to the buyer.")}</strong>{" "}
+                    {t("The buyer pays the delivery, priced by distance once they set where to deliver. It costs you nothing.")}
                   </span>
                 </div>
               ) : form.needsDelivery ? (
@@ -142,7 +150,7 @@ export default function NewTradePage() {
                 <p className="hint">{asBuyer ? t("For services, digital items, or anything handed over in person. No delivery fee is added.") : t("For services, digital items, or anything you hand over yourself. No delivery fee is added.")}</p>
               )}
               {!asBuyer && form.needsDelivery && (
-                <div style={{ marginTop: 6 }}><BranchPicker value={branchId} onChange={setBranchId} onLoaded={setHasBranches} /></div>
+                <div style={{ marginTop: 6 }}><OriginPicker value={origin} onChange={setOrigin} onLoaded={setHasBranches} initialSpot={lastSpot} /></div>
               )}
             </div>
 
@@ -206,6 +214,7 @@ export default function NewTradePage() {
               <div className="kv"><span>{t("Item price")}</span><span>{money(amount)}</span></div>
               <div className="kv"><span>{t("Zola fee ({rate}), paid by the buyer", { rate: feePercentLabel(amount) })}</span><span>{money(fee)}</span></div>
               {deliveryFee > 0 && <div className="kv"><span>{t("Delivery, paid by the buyer")}</span><span>{money(deliveryFee)}</span></div>}
+              {pickupOn && form.needsDelivery && <div className="kv"><span>{t("Delivery, paid by the buyer")}</span><span>{t("By distance")}</span></div>}
               <div className="kv kv-total"><span>{t("Buyer pays")}</span><span>{money(buyerTotal)}</span></div>
               <div className="receipt-out" style={{ marginTop: 14 }}>
                 <span>{t("You receive")}</span><strong>{money(amount)}</strong>
@@ -215,7 +224,7 @@ export default function NewTradePage() {
                   ? t("The buyer pays the Zola fee and delivery on top of your price. Nothing is taken from what you receive.")
                   : t("The buyer pays the Zola fee on top of your price. Nothing is taken from what you receive.")}
               </p>
-              {deliveryFee > 0 && (
+              {deliveryFee > 0 && !pickupOn && (
                 <p className="hint" style={{ marginTop: 12 }}>
                   {t("Delivery is {delivery} for a standard delivery. If the item costs more than that to deliver, the buyer pays the difference.", { delivery: money(DELIVERY_FEE) })}
                 </p>

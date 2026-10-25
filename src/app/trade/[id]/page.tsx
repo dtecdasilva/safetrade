@@ -15,7 +15,8 @@ import { useT, rich } from "@/components/I18n";
 import { REPORT_MAX, REPORT_MIN, REPORT_REASONS, canReportSeller, reportReasonLabel } from "@/lib/reports";
 import { intlDigits } from "@/lib/support";
 import DeliveryPanel from "@/components/pickup/DeliveryPanel";
-import BranchPicker from "@/components/pickup/BranchPicker";
+import OriginPicker, { OriginValue, originReady } from "@/components/pickup/OriginPicker";
+import DeliverySpot from "@/components/pickup/DeliverySpot";
 
 const NETWORKS = [
   { id: "mtn",    label: "MTN MoMo" },
@@ -87,7 +88,7 @@ export default function TradePage() {
   // A transaction the buyer started: the seller confirms or declines it
   const [declining, setDeclining]     = useState(false);
   const [declineWhy, setDeclineWhy]   = useState("");
-  const [acceptBranch, setAcceptBranch] = useState("");
+  const [acceptOrigin, setAcceptOrigin] = useState<OriginValue>({ deliveryMode: "" });
   const [hasBranches, setHasBranches]   = useState(false);
   // The Pickup delivery (goods sent through a bus agency)
   const [delivery, setDelivery]         = useState<any>(null);
@@ -324,18 +325,17 @@ export default function TradePage() {
         </p>
         <div style={{ padding: "8px 14px 12px", background: "var(--bg)", borderRadius: "var(--r-md)", marginBottom: 16 }}>
           <div className="kv"><span>{t("Item")}</span><span style={{ overflowWrap: "anywhere", textAlign: "right" }}>{trade.title}</span></div>
-          <div className="kv"><span>{t("Delivery")}</span><span>{trade.needs_delivery === false ? t("Nothing to deliver") : t("You send it to Zola")}</span></div>
+          <div className="kv"><span>{t("Delivery")}</span><span>{trade.needs_delivery === false ? t("Nothing to deliver") : hasBranches ? t("By a Zola rider") : t("You send it to Zola")}</span></div>
           <div className="kv kv-total"><span>{t("You receive")}</span><span style={{ fontSize: 18, fontWeight: 800 }}>{money(trade.amount)}</span></div>
         </div>
         {trade.needs_delivery !== false && (
           <div style={{ marginBottom: 14 }}>
-            {hasBranches && <p className="hint" style={{ marginBottom: 8 }}>{t("Choose the bus agency branch in the buyer's city you will send it to. Once the buyer pays, we give you the Zola rider's name to write on the parcel.")}</p>}
-            <BranchPicker value={acceptBranch} onChange={setAcceptBranch} onLoaded={setHasBranches} idPrefix="acc" />
+            <OriginPicker value={acceptOrigin} onChange={setAcceptOrigin} onLoaded={setHasBranches} idPrefix="acc" />
           </div>
         )}
         {!declining ? (
           <div className="btn-row">
-            <button onClick={() => act("accept", { destBranchId: acceptBranch })} disabled={acting || (hasBranches && trade.needs_delivery !== false && !acceptBranch)} className="btn btn-primary" style={{ flex: 1 }}>
+            <button onClick={() => act("accept", acceptOrigin)} disabled={acting || (hasBranches && trade.needs_delivery !== false && !originReady(acceptOrigin))} className="btn btn-primary" style={{ flex: 1 }}>
               <CheckCircle size={17} /> {acting ? t("Confirming...") : t("Confirm details")}
             </button>
             <button onClick={() => { setDeclining(true); setError(""); }} disabled={acting} className="btn btn-secondary">
@@ -390,6 +390,17 @@ export default function TradePage() {
         {notifyMsg && <p role="alert" className="hint-error" style={{ marginTop: 10 }}>{t(notifyMsg)}</p>}
       </section>
     );
+  } else if (isBuyer && trade.status === "pending_payment" && trade.delivery_pending) {
+    /* Pickup: the delivery fee comes from the distance, so the buyer says where to deliver first */
+    action = (
+      <section className="card card-pad tx-action fade-up" aria-labelledby="spot-title">
+        <h2 id="spot-title" className="section-title">{t("Where should we deliver?")}</h2>
+        <p className="hint" style={{ margin: "2px 0 14px" }}>
+          {t("A Zola rider brings it to you. The delivery price depends on the distance from {from}, so mark your spot first. You'll see the full total before you pay.", { from: trade.origin?.kind === "spot" ? (trade.origin.city || "") : trade.dest_branch ? `${trade.dest_branch.agency}, ${trade.dest_branch.name}` : "" })}
+        </p>
+        <DeliverySpot tradeId={trade.id} initial={null} onSaved={load} saveLabel={t("See the delivery price")} />
+      </section>
+    );
   } else if (isBuyer && trade.status === "pending_payment") {
     action = !paymentSent ? (
       <section className="card card-pad tx-action" aria-labelledby="pay-title">
@@ -401,7 +412,7 @@ export default function TradePage() {
         <div style={{ padding: "8px 14px 12px", background: "var(--bg)", borderRadius: "var(--r-md)", marginBottom: deliveryFee > 0 ? 8 : 18 }}>
           <div className="kv"><span>{t("Item price")}</span><span>{money(trade.amount)}</span></div>
           <div className="kv"><span>{t("Zola fee ({rate})", { rate: feePercentOf(trade) })}</span><span>{money(trade.fee)}</span></div>
-          {deliveryFee > 0 && <div className="kv"><span>{t("Delivery")}</span><span>{money(deliveryFee)}</span></div>}
+          {deliveryFee > 0 && <div className="kv"><span>{trade.delivery_km ? t("Delivery ({km} km)", { km: trade.delivery_km }) : t("Delivery")}</span><span>{money(deliveryFee)}</span></div>}
           <div className="kv kv-total">
             <span>{t("Total to pay")}</span>
             <span style={{ fontSize: 18, fontWeight: 800 }}>{money(total)}</span>
@@ -536,7 +547,7 @@ export default function TradePage() {
         {notifyMsg && <p role="alert" className="hint-error" style={{ marginTop: 10 }}>{t(notifyMsg)}</p>}
       </section>
     );
-  } else if (isVendor && trade.status === "funds_held" && trade.dest_branch && hasDelivery) {
+  } else if (isVendor && trade.status === "funds_held" && (trade.dest_branch || trade.origin) && trade.needs_delivery !== false) {
     // Goods through a bus agency: the seller sends it to the Pickup rider
     action = <DeliveryPanel trade={trade} delivery={delivery} viewer="seller" onChange={load} act={act} acting={acting} />;
   } else if (isVendor && trade.status === "funds_held") {
@@ -951,7 +962,7 @@ export default function TradePage() {
             {action}
 
             {/* Where the parcel is (buyer and admin) */}
-            {trade.dest_branch && (isBuyer || isAdmin) && <DeliveryPanel trade={trade} delivery={delivery} viewer={isBuyer ? "buyer" : "admin"} onChange={load} />}
+            {(trade.dest_branch || trade.origin) && (isBuyer || isAdmin) && <DeliveryPanel trade={trade} delivery={delivery} viewer={isBuyer ? "buyer" : "admin"} onChange={load} />}
 
             {/* Activity */}
             <section className="card card-pad tx-activity fade-up" aria-labelledby="activity-title">
@@ -973,7 +984,8 @@ export default function TradePage() {
               <div style={{ marginTop: 14 }}>
                 <div className="kv"><span>{t("Item price")}</span><span>{money(trade.amount)}</span></div>
                 <div className="kv"><span>{isVendor ? t("Zola fee ({rate}), paid by the buyer", { rate: feePercentOf(trade) }) : t("Zola fee ({rate})", { rate: feePercentOf(trade) })}</span><span>{money(trade.fee)}</span></div>
-                {deliveryFee > 0 && <div className="kv"><span>{isVendor ? t("Delivery, paid by the buyer") : t("Delivery")}</span><span>{money(deliveryFee)}</span></div>}
+                {deliveryFee > 0 && <div className="kv"><span>{isVendor ? t("Delivery, paid by the buyer") : trade.delivery_km ? t("Delivery ({km} km)", { km: trade.delivery_km }) : t("Delivery")}</span><span>{money(deliveryFee)}</span></div>}
+                {trade.delivery_pending && <div className="kv"><span>{t("Delivery")}</span><span>{t("By distance, once the buyer sets where to deliver")}</span></div>}
                 <div className="kv kv-total"><span>{isBuyer ? t("Total") : t("Buyer pays")}</span><span>{money(total)}</span></div>
               </div>
 
@@ -1028,7 +1040,8 @@ export default function TradePage() {
                   ? <div className="kv"><span>{t("Delivery time")}</span><span>{Number(trade.delivery_days) === 1 ? t("1 day after payment") : t("{n} days after payment", { n: trade.delivery_days })}</span></div>
                   : null}
               {trade.dest_branch && <div className="kv"><span>{t("Sent to")}</span><span style={{ textAlign: "right" }}>{trade.dest_branch.agency}, {trade.dest_branch.name} ({trade.dest_branch.city})</span></div>}
-              {trade.dest_branch && delivery?.rider_name && isVendor && <div className="kv"><span>{t("Zola rider")}</span><span>{delivery.rider_name}</span></div>}
+              {trade.delivery_mode === "same_city" && trade.origin && <div className="kv"><span>{t("Collected from")}</span><span style={{ textAlign: "right" }}>{isVendor || isAdmin ? `${trade.origin.label} (${trade.origin.city})` : t("The seller, in {city}", { city: trade.origin.city })}</span></div>}
+              {(trade.dest_branch || trade.origin) && delivery?.rider_name && isVendor && <div className="kv"><span>{t("Zola rider")}</span><span>{delivery.rider_name}</span></div>}
               {trade.tracking_number && <div className="kv"><span>{trade.dest_branch ? t("Agency receipt") : t("Tracking number")}</span><span>{trade.tracking_number}</span></div>}
               {trade.created_at && <div className="kv"><span>{t("Created")}</span><span suppressHydrationWarning>{fmtDate(trade.created_at, lang)}</span></div>}
               {deliveryFee > 0 && !isVendor && !["complete", "cancelled"].includes(trade.status) && (

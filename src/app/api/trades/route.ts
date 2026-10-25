@@ -8,7 +8,7 @@ import { quote, feePercentLabel, DELIVERY_NOTE } from "@/lib/fees";
 import { cleanPhone as normalizePhone, cleanEmail, isEmail } from "@/lib/users";
 import { INVITED_BUYER_NAME, INVITED_SELLER_NAME, invitedBuyerId, invitedSellerId, inviteSummary, sendBuyerInvite, sendSellerInvite, sellerInviteSummary } from "@/lib/invites";
 import { siteUrl } from "@/lib/support";
-import { branchSnapshot } from "@/lib/pickup/deliveries";
+import { originFromBody, pickupOn, pickupPrice } from "@/lib/pickup/tradeDelivery";
 import {
   notifyBuyerTradeCreated,
   notifyAdminTradeCreated,
@@ -112,13 +112,22 @@ export async function POST(req: NextRequest) {
     // Fee added on top — buyer pays item price + fee, vendor receives full item price
     // Delivery is added unless the seller says there is nothing to deliver (a service, for example)
     const withDelivery = needsDelivery !== false;
-    const { fee, deliveryFee, total: buyerTotal } = quote(Number(amount), withDelivery);
 
-    // Goods go by bus agency: the seller picks the branch in the buyer's city.
-    // (Required once Zola has agency branches set up.)
-    const destBranch = withDelivery ? await branchSnapshot(db, destBranchId) : null;
-    if (withDelivery && !destBranch && (await db.collection("agency_branches").where("active", "==", true).limit(1).get()).size > 0)
-      return NextResponse.json({ error: "Choose the agency branch you will send it to" }, { status: 400 });
+    // Pickup delivers goods: in the same city the rider collects from the seller,
+    // otherwise the seller sends it by bus agency to a branch in the buyer's city.
+    // The delivery fee comes from the distance, once the buyer says where to deliver.
+    const usePickup = withDelivery && (await pickupOn(db));
+    const choice = usePickup ? await originFromBody(db, body) : {};
+    if (usePickup && (choice as any).error)
+      return NextResponse.json({ error: (choice as any).error }, { status: 400 });
+    const flat = quote(Number(amount), withDelivery);
+    const priced = usePickup ? await pickupPrice(db, Number(amount), (choice as any).origin, null) : null;
+    const fee = flat.fee;
+    const deliveryFee = priced ? priced.delivery_fee : flat.deliveryFee;
+    const buyerTotal = priced ? priced.buyer_total : flat.total;
+    const destBranch = (choice as any).branch || null;
+    // Remember the seller's pickup spot for next time
+    if ((choice as any).mode === "same_city") await db.collection("users").doc(session.id).update({ pickup_spot: (choice as any).origin }).catch(() => {});
 
     const id  = randomUUID();
     const now = new Date().toISOString();
@@ -147,6 +156,7 @@ export async function POST(req: NextRequest) {
       id, title, description,
       created_by:  "seller",
       ...(destBranch ? { dest_branch: destBranch } : {}),
+      ...(usePickup ? { delivery_mode: (choice as any).mode, origin: (choice as any).origin, delivery_pending: true, delivery_km: 0 } : {}),
       amount:      Number(amount),  // vendor receives this in full
       fee,                           // Zola fee paid by buyer
       needs_delivery: withDelivery,  // false for services and other things with nothing to deliver
@@ -244,8 +254,9 @@ export async function POST(req: NextRequest) {
           ["Prix de l'article", fmt(Number(amount))],
           [`Frais Zola (${rate})`, fmt(fee)],
           ...(deliveryFee > 0 ? [["Livraison", fmt(deliveryFee)] as [string, string]] : []),
+          ...(usePickup ? [["Livraison", "Calculée selon la distance, avant de payer"] as [string, string]] : []),
         ],
-        totalRow: ["Total à payer", fmt(buyerTotal)],
+        totalRow: [usePickup ? "Total hors livraison" : "Total à payer", fmt(buyerTotal)],
         cta: { label: "Vérifier et payer en sécurité", url: payUrl },
         note: `Vous payez Zola, pas le vendeur. Nous gardons votre paiement jusqu'à votre confirmation de livraison.${deliveryFee > 0 ? " La livraison standard coûte FCFA 1,000. Si la livraison de votre article coûte plus cher, vous paierez la différence." : ""}${warnFr}`,
       }),
@@ -261,8 +272,9 @@ export async function POST(req: NextRequest) {
           ["Item price", fmt(Number(amount))],
           [`Zola fee (${rate})`, fmt(fee)],
           ...(deliveryFee > 0 ? [["Delivery", fmt(deliveryFee)] as [string, string]] : []),
+          ...(usePickup ? [["Delivery", "Worked out from the distance, before you pay"] as [string, string]] : []),
         ],
-        totalRow: ["Total to pay", fmt(buyerTotal)],
+        totalRow: [usePickup ? "Total before delivery" : "Total to pay", fmt(buyerTotal)],
         cta: { label: "Review and pay securely", url: payUrl },
         note: `You pay Zola, not the seller. We hold your payment until you confirm delivery.${deliveryFee > 0 ? ` ${DELIVERY_NOTE}` : ""}${warnEn}`,
       }),
@@ -336,7 +348,11 @@ async function createAsBuyer(session: { id: string; name: string }, body: any) {
   }
 
   const withDelivery = needsDelivery !== false;
-  const { fee, deliveryFee, total: buyerTotal } = quote(Number(amount), withDelivery);
+  // With Pickup on, the seller chooses how it travels when confirming, and the
+  // delivery fee comes from the distance once the buyer sets where to deliver
+  const usePickup = withDelivery && (await pickupOn(db));
+  const flat = quote(Number(amount), withDelivery && !usePickup);
+  const fee = flat.fee, deliveryFee = flat.deliveryFee, buyerTotal = flat.total;
   const id  = randomUUID();
   const now = new Date().toISOString();
 
@@ -368,6 +384,7 @@ async function createAsBuyer(session: { id: string; name: string }, body: any) {
     needs_delivery: withDelivery,
     delivery_fee: deliveryFee,
     buyer_total: buyerTotal,
+    ...(usePickup ? { delivery_pending: true } : {}),
     status: "awaiting_seller",
     delivery_days: deliveryDays || 7,
     delivery_deadline: null,

@@ -391,7 +391,7 @@ export async function notifyTradeMove(
             ? `${sellerFr} a remis ${itemFr} à Zola pour la livraison. Confirmez la livraison dès réception pour que le vendeur soit payé.`
             : `${sellerFr} a indiqué ${itemFr} comme livré. Confirmez la livraison une fois reçu pour que le vendeur soit payé.` });
         // Sent through an agency to a Pickup rider: the rider delivers it, not the admin
-        if ((trade as any).dest_branch) break;
+        if ((trade as any).dest_branch || (trade as any).origin) break;
         out.push({ ...base, userId: ADMIN_AUDIENCE, tone: goods ? "warn" : "info",
           title: goods ? "Item handed over for delivery" : "Order marked as delivered",
           body: goods

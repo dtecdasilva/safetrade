@@ -30,9 +30,9 @@ export async function POST(req: NextRequest) {
       if (d.status !== "assigned")
         return NextResponse.json({ error: "The seller has already sent the parcel in your name. Call Zola if you can't collect it." }, { status: 400 });
       await ref.update({ status: "waiting_rider", rider_id: null, rider_name: "", rider_phone: "", declined: [...(d.declined || []), rider.id], history: hist("declined"), updated_at: now() });
-      await releaseRider(db, rider.id, d.trade_id);
+      await releaseRider(db, rider.id, d.id);
       // Offer it to the next rider (they and the seller are told)
-      await assignRider(db, d.trade_id);
+      await assignRider(db, d.id);
       return NextResponse.json({ success: true });
     }
 
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
         return true;
       });
       if (!claimed) return NextResponse.json({ error: "This delivery is already finished" }, { status: 400 });
-      await releaseRider(db, rider.id, d.trade_id);
+      await releaseRider(db, rider.id, d.id);
       await db.collection("riders").doc(rider.id).update({ deliveries_done: (Number(rider.deliveries_done) || 0) + 1 });
       if (Number(d.rider_pay) > 0)
         await moveRiderMoney(db, rider.id, Number(d.rider_pay), { type: "earning", note: `Delivery: ${d.title}`, trade_id: d.trade_id });

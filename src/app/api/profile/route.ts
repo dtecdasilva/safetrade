@@ -15,6 +15,8 @@ function publicProfile(u: any) {
     phone: u.phone || "",
     role: u.role,
     sells: u.sells || "",
+    // Where Pickup riders last collected from this seller (pre-fills the next transaction)
+    pickup_spot: u.pickup_spot || null,
     created_at: u.created_at || "",
     signed_up_with_google: u.auth_provider === "google",
     // People who signed up with Google have no password until they set one

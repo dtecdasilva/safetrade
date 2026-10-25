@@ -18,11 +18,10 @@ export default function PickupHome() {
   return (
     <div className="pk-home">
       <section className="pk-hero">
-        <h1>{t("Deliver parcels in your city")}</h1>
-        <p>{t("Pickup is Zola's delivery service. Riders collect parcels at bus agencies and bring them to buyers, who follow them on a map.")}</p>
+        <h1>{t("Send anything, anywhere in your city")}</h1>
+        <p>{t("Pickup delivers parcels, shop orders, appliances and more. A checked rider collects it, you follow it on the map, and you only pay by distance.")}</p>
         <div className="pk-actions">
-          <Link href={`${base}/signup`} className="btn btn-primary btn-lg">{t("Become a rider")}</Link>
-          <Link href={`${base}/login`} className="btn btn-secondary btn-lg">{t("Sign in")}</Link>
+          <Link href={`${base}/send`} className="btn btn-primary btn-lg">{t("Send a parcel")}</Link>
         </div>
       </section>
 
@@ -34,6 +33,10 @@ export default function PickupHome() {
 
       <section className="pk-card">
         <h2 className="pk-h2">{t("How it works for riders")}</h2>
+        <div className="pk-actions" style={{ margin: "4px 0 14px" }}>
+          <Link href={`${base}/signup`} className="btn btn-secondary">{t("Become a rider")}</Link>
+          <Link href={`${base}/login`} className="btn btn-ghost">{t("Rider sign in")}</Link>
+        </div>
         <ol className="pk-steps">
           {steps.map((s) => (
             <li key={s.title}>

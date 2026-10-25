@@ -17,6 +17,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Only the buyer can pay for this transaction" }, { status: 403 });
     if (trade.status !== "pending_payment")
       return NextResponse.json({ error: "This transaction isn't waiting for payment" }, { status: 400 });
+    // Pickup works out the delivery fee from where the buyer wants it delivered
+    if (trade.delivery_pending)
+      return NextResponse.json({ error: "Set where to deliver first, so the delivery fee can be worked out." }, { status: 400 });
 
     const body = await req.json();
     const { phoneNumber, network } = body;

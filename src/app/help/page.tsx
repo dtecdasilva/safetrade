@@ -23,10 +23,10 @@ const FAQ: { q: string; a: string[] }[] = [
   {
     q: "How much does Zola cost?",
     a: [
-      "Zola charges 8% of the item price, or 5% when the item costs more than FCFA 50,000. Delivery is FCFA 1,000. Both are added to the buyer's total and shown before payment. The seller receives the full item price.",
+      "Zola charges 8% of the item price, or 5% when the item costs more than FCFA 50,000. Delivery is priced by distance. Both are added to the buyer's total and shown before payment. The seller receives the full item price.",
       "For example, a FCFA 30,000 item has a FCFA 2,400 fee, and a FCFA 100,000 item has a FCFA 5,000 fee.",
       "The delivery fee only applies when there is something to deliver. For a service, or anything the seller hands over themselves, the seller switches delivery off and only the Zola fee is added.",
-      "The FCFA 1,000 covers a standard delivery. If your item costs more than that to deliver, you will have to pay the difference.",
+      "The delivery price depends on the distance from where the rider collects your order to where you want it. You see it as soon as you mark your spot on the map, before you pay.",
     ],
   },
   {
@@ -118,10 +118,10 @@ const FAQ_FR: { q: string; a: string[] }[] = [
   {
     q: "Combien coûte Zola ?",
     a: [
-      "Zola prend 8 % du prix de l'article, ou 5 % quand l'article coûte plus de FCFA 50,000. La livraison coûte FCFA 1,000. Les deux sont ajoutés au total de l'acheteur et affichés avant le paiement. Le vendeur reçoit la totalité du prix de l'article.",
+      "Zola prend 8 % du prix de l'article, ou 5 % quand l'article coûte plus de FCFA 50,000. La livraison est calculée selon la distance. Les deux sont ajoutés au total de l'acheteur et affichés avant le paiement. Le vendeur reçoit la totalité du prix de l'article.",
       "Par exemple, un article à FCFA 30,000 a FCFA 2,400 de frais, et un article à FCFA 100,000 a FCFA 5,000 de frais.",
       "Les frais de livraison ne s'appliquent que s'il y a quelque chose à livrer. Pour un service, ou un article que le vendeur remet lui-même, le vendeur désactive la livraison et seuls les frais Zola sont ajoutés.",
-      "Les FCFA 1,000 couvrent une livraison standard. Si la livraison de votre article coûte plus cher, vous paierez la différence.",
+      "Le prix de la livraison dépend de la distance entre le lieu où le livreur récupère votre commande et votre lieu. Vous le voyez dès que vous placez votre repère sur la carte, avant de payer.",
     ],
   },
   {

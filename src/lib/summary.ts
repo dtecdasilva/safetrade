@@ -8,6 +8,7 @@
 import { emailLayout } from "@/lib/mail";
 import { reviewState } from "@/lib/review";
 import { siteUrl } from "@/lib/support";
+import { originOf } from "@/lib/pickup/config";
 
 const fcfa = (n: unknown) => `FCFA ${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
 const when = (iso: string) =>
@@ -48,7 +49,7 @@ export async function buildDailySummary(db: any, now: number = Date.now()): Prom
   const toCall     = review.filter((x) => !x.r.complaintOpen && !x.r.contacted && !!x.r.endsAt);
   const toRelease  = review.filter((x) => x.r.canRelease);
   const disputes   = trades.filter((t) => t.status === "disputed");
-  const toDeliver  = trades.filter((t) => t.status === "shipped" && isGoods(t) && !t.dest_branch); // Pickup riders handle the rest
+  const toDeliver  = trades.filter((t) => t.status === "shipped" && isGoods(t) && !t.dest_branch && !t.origin); // Pickup riders handle the rest
   const stuck      = trades.filter((t) => {
     if (t.status !== "pending_payment" || !t.payment_started_at) return false;
     const age = now - Date.parse(t.payment_started_at);
@@ -65,7 +66,7 @@ export async function buildDailySummary(db: any, now: number = Date.now()): Prom
     { title: `Seller reports to review (${reports.length})`,
       items: reports.map((r) => ({ url: `${base}/admin?tab=reports`, text: `${r.vendor_name}, reported by ${r.reporter_name} on “${r.trade_title}”: ${String(r.details || "").slice(0, 90)}` })) },
     { title: `Parcels with no rider yet (${noRider.length})`,
-      items: noRider.map((d) => ({ url: link({ id: d.trade_id }), text: `${d.title}: no free rider in ${d.branch?.city} can carry ${fcfa(d.amount)}. Assign one, or ask a rider to top up.` })) },
+      items: noRider.map((d) => ({ url: d.trade_id ? link({ id: d.trade_id }) : `${base}/admin?tab=deliveries`, text: `${d.title}: no free rider in ${originOf(d)?.city || d.city} can carry ${fcfa(d.amount)}. Assign one, or ask a rider to top up.` })) },
     { title: `Riders to approve (${newRiders.length})`,
       items: newRiders.map((r) => ({ url: `${base}/admin?tab=riders`, text: `${r.name}, ${r.city}, +237 ${r.phone}: check their ID, then approve.` })) },
     { title: `Rider withdrawals to send (${riderW.length})`,
