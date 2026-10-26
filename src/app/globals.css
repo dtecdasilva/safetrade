@@ -1028,3 +1028,48 @@ img, svg { max-width: 100%; }
 .pk-results button { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 9px 10px; border: none; background: none; text-align: left; font: inherit; font-size: 14px; color: var(--navy); cursor: pointer; border-radius: 8px; }
 .pk-results button:hover, .pk-results button:focus-visible { background: var(--fill); }
 .pk-results svg { flex-shrink: 0; margin-top: 2px; color: #F08A24; }
+
+/* ── Admin: Earnings ─────────────────────────────────────────────────────── */
+.earn { --earn-zola: #087F5B; --earn-pickup: #C2650F; }
+:root[data-theme="dark"] .earn { --earn-zola: #21966E; --earn-pickup: #C26F20; }
+.earn-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); gap: 14px; }
+.earn-hero-value { font-size: 34px !important; }
+.earn-split { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; color: var(--emerald-press); margin-top: 4px; }
+.earn-split strong { font-variant-numeric: tabular-nums; }
+.earn-change { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.earn-change-light { color: var(--emerald-press); }
+.earn-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.earn-sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; flex-shrink: 0; }
+.earn-sw-zola { background: var(--earn-zola); }
+.earn-sw-pickup { background: var(--earn-pickup); }
+.earn .stat-label { display: flex; align-items: center; }
+.earn-chart-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 10px; }
+.earn-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 13.5px; color: var(--ink-2); }
+.earn-legend span { display: inline-flex; align-items: center; }
+.earn-chart { position: relative; }
+.earn-chart svg { display: block; overflow: visible; }
+.earn-fill-zola { fill: var(--earn-zola); }
+.earn-fill-pickup { fill: var(--earn-pickup); }
+.earn-grid-line { stroke: var(--line-soft); stroke-width: 1; }
+.earn-axis { stroke: var(--line); stroke-width: 1; }
+.earn-tick { font-size: 11px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
+.earn-chart rect:focus { outline: none; }
+.earn-tip { position: absolute; top: 0; transform: translateX(-50%); min-width: 190px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md, 10px); box-shadow: var(--shadow-md); font-size: 13px; color: var(--ink-2); pointer-events: none; z-index: 2; }
+.earn-tip p { display: flex; align-items: center; margin: 2px 0; white-space: nowrap; }
+.earn-tip strong { margin-left: auto; padding-left: 12px; color: var(--navy); font-variant-numeric: tabular-nums; }
+.earn-tip-title { font-weight: 700; color: var(--navy); }
+.earn-tip-total { border-top: 1px solid var(--line-soft); margin-top: 6px !important; padding-top: 6px; }
+.earn-bar { height: 8px; border-radius: 4px; background: var(--fill, #EEF2F6); margin-top: 6px; overflow: hidden; }
+.earn-bar span { display: block; height: 100%; border-radius: 4px; background: var(--earn-zola); }
+@media (max-width: 900px) { .earn-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .earn-hero { grid-column: 1 / -1; } }
+@media (max-width: 700px) { .earn-two { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .earn-grid { grid-template-columns: minmax(0, 1fr); } .earn-tip { min-width: 160px; } }
+.earn .table { min-width: 0; }
+.earn .table th.num, .earn .table td.num { text-align: right; }
+.earn .table th, .earn .table td { padding-left: 12px; padding-right: 12px; }
+.earn .table th:first-child, .earn .table td:first-child { padding-left: 20px; white-space: normal; }
+.earn .table th:last-child, .earn .table td:last-child { padding-right: 20px; }
+.earn-change { align-items: flex-start; line-height: 1.35; }
+.earn-change svg { margin-top: 2px; flex-shrink: 0; }
+.earn-was { display: block; font-weight: 500; opacity: 0.85; }
+@media (max-width: 560px) { .earn-hide-sm { display: none; } .earn .table td, .earn .table th { white-space: normal; } }

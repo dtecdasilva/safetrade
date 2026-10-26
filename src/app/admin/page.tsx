@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import { Search, X, ShieldCheck, CheckCircle, AlertTriangle, Trash2, Edit3, Banknote, Phone, PhoneCall, Flag } from "lucide-react";
 import { reportReasonLabel } from "@/lib/reports";
 import AdminPickup from "@/components/pickup/AdminPickup";
+import Earnings from "@/components/admin/Earnings";
 import { PageLoader, Pill, StatusPill } from "@/components/ui";
 import { WITHDRAWAL_STATUS, brandText, fmtDate, fmtDateTime, money, roleLabel, shortId, statusMeta } from "@/lib/zola";
 import { reviewLabel, reviewState } from "@/lib/review";
@@ -13,7 +14,7 @@ import { reviewLabel, reviewState } from "@/lib/review";
 export default function AdminPage() {
   const router = useRouter();
   const [user, setUser]                     = useState<any>(null);
-  const [tab, setTab]                       = useState<"trades"|"users"|"withdrawals"|"reports"|"riders"|"agencies"|"deliveries">("trades");
+  const [tab, setTab]                       = useState<"earnings"|"trades"|"users"|"withdrawals"|"reports"|"riders"|"agencies"|"deliveries">("earnings");
   const [reports, setReports]               = useState<any[]>([]);
   const [sellers, setSellers]               = useState<Record<string, any>>({});
   const [flagFor, setFlagFor]               = useState<{ id: string; name: string } | null>(null);
@@ -47,7 +48,7 @@ export default function AdminPage() {
   // Links from emails can open a tab directly: /admin?tab=reports
   useEffect(() => {
     const want = new URLSearchParams(window.location.search).get("tab");
-    if (want === "reports" || want === "users" || want === "withdrawals" || want === "riders" || want === "agencies" || want === "deliveries") setTab(want);
+    if (want === "earnings" || want === "trades" || want === "reports" || want === "users" || want === "withdrawals" || want === "riders" || want === "agencies" || want === "deliveries") setTab(want);
   }, []);
 
   async function setFlag(userId: string, flagged: boolean, note = "") {
@@ -111,6 +112,7 @@ export default function AdminPage() {
   const needsAttention  = pendingRelease.length + pendingW.length + disputed.length + openReports.length > 0;
 
   const TABS = [
+    { key: "earnings" as const,    label: "Earnings" },
     { key: "trades" as const,      label: `Transactions (${trades.length})` },
     { key: "users" as const,       label: `Users (${users.length})` },
     { key: "withdrawals" as const, label: `Withdrawals${pendingW.length > 0 ? ` (${pendingW.length})` : ""}` },
@@ -131,7 +133,7 @@ export default function AdminPage() {
         {/* Header */}
         <div style={{ marginBottom: 24 }}>
           <h1 className="page-title">Admin</h1>
-          <p className="page-sub">Review deliveries, release payments, send withdrawals and manage accounts.</p>
+          <p className="page-sub">See what Zola earns, review deliveries, release payments, send withdrawals and manage accounts.</p>
         </div>
 
         {actionError && (
@@ -237,6 +239,9 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* ── EARNINGS ── */}
+        {tab === "earnings" && <Earnings />}
 
         {/* ── PICKUP: riders and agency branches ── */}
         {(tab === "riders" || tab === "agencies" || tab === "deliveries") && <AdminPickup tab={tab} />}
