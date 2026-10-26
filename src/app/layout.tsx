@@ -35,7 +35,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const lang = getLang();
-  // Pickup (pickup.zolahq.com) is kept light: no install prompt, no payment widget
+  // Pickup (pickup.zolahq.com) installs as its own app and skips Zola's payment widget
   const pickup = headers().get("x-zola-site") === "pickup";
   return (
     <html lang={lang} suppressHydrationWarning>
@@ -46,7 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <I18nProvider lang={lang}>
           {children}
-          {!pickup && <PwaSetup />}
+          <PwaSetup site={pickup ? "pickup" : "zola"} />
         </I18nProvider>
         {!pickup && <script type="text/javascript" src="https://www.monetbil.com/widget/v2/monetbil.min.js"></script>}
       </body>

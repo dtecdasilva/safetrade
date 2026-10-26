@@ -105,3 +105,45 @@ export async function sendWelcomeEmail(user: {
     return false;
   }
 }
+
+/** Welcome for someone who created their account on Pickup to send parcels. */
+export async function sendPickupWelcome(user: { name: string; email: string; lang?: string }): Promise<boolean> {
+  try {
+    if (!user.email) return false;
+    const fr = user.lang === "fr";
+    const first = String(user.name || "").trim().split(" ")[0] || "";
+    const { pickupUrl } = await import("@/lib/pickup/config");
+    const url = `${pickupUrl()}/send`;
+    const items = fr
+      ? [
+          "Dites ce que vous envoyez, d'où et vers où. Le prix dépend de la distance, vous le voyez avant de payer.",
+          "Payez par Mobile Money. Un livreur Pickup vérifié est envoyé aussitôt.",
+          "Suivez le colis sur la carte. Envoyez au destinataire le code à 4 chiffres : il le donne au livreur seulement après avoir vérifié le colis.",
+          "Toutes vos livraisons sont dans « Mes livraisons ». Le même compte marche aussi sur Zola pour acheter ou vendre en sécurité.",
+        ]
+      : [
+          "Say what you're sending, from where and to where. The price depends on the distance, and you see it before you pay.",
+          "Pay by mobile money. A checked Pickup rider is sent straight away.",
+          "Follow the parcel on the map. Send the receiver the 4-digit code: they give it to the rider only after checking the parcel.",
+          "All your deliveries are in My deliveries. The same account also works on Zola, to buy and sell safely.",
+        ];
+    const heading = fr ? `Bienvenue sur Pickup${first ? `, ${first}` : ""}` : `Welcome to Pickup${first ? `, ${first}` : ""}`;
+    const cta = { label: fr ? "Envoyer un colis" : "Send a parcel", url };
+    const res = await sendEmail({
+      to: user.email,
+      subject: fr ? "Bienvenue sur Pickup" : "Welcome to Pickup",
+      text: [heading, "", ...items.map((i) => `- ${i}`), "", `${cta.label}: ${url}`, "", supportLine(fr ? "fr" : "en")].join("\n"),
+      html: emailLayout({
+        lang: fr ? "fr" : "en",
+        heading,
+        intro: fr ? "Votre compte est prêt. Voici comment envoyer un colis :" : "Your account is ready. Here's how sending works:",
+        sections: [{ title: fr ? "Envoyer avec Pickup" : "Sending with Pickup", items: items.map((text) => ({ text })) }],
+        cta,
+      }),
+    });
+    return !!res.success;
+  } catch (e: any) {
+    console.error("[welcome] pickup email failed:", e?.message);
+    return false;
+  }
+}

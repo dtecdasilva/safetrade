@@ -1,10 +1,11 @@
-/** Pickup's mark: a parcel with a location pin. */
+/** Pickup's mark: a location pin carrying a parcel (same as the app icon). */
 export function PickupMark({ size = 26 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="2" y="2" width="28" height="28" rx="8" fill="#F08A24" />
-      <path d="M16 7c-3.9 0-7 3-7 6.8 0 4.9 7 11.2 7 11.2s7-6.3 7-11.2C23 10 19.9 7 16 7z" fill="#fff" />
-      <circle cx="16" cy="13.8" r="2.6" fill="#F08A24" />
+      <rect width="32" height="32" rx="7" fill="#F08A24" />
+      <path d="M16 5.6c-4.4 0-8 3.4-8 7.7 0 5.6 8 12.9 8 12.9s8-7.3 8-12.9c0-4.3-3.6-7.7-8-7.7z" fill="#fff" />
+      <rect x="12.7" y="10.2" width="6.6" height="6" rx="0.9" fill="#F08A24" />
+      <path d="M16 10.2v2.3" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }

@@ -7,12 +7,18 @@ import { cleanPhone as normalizePhone, phoneInUse, PHONE_TAKEN } from "@/lib/use
 import { claimInvitedTrades } from "@/lib/invites";
 import { normalizeLang } from "@/lib/i18n/core";
 import { getLang } from "@/lib/i18n/server";
-import { sendWelcomeEmail } from "@/lib/welcome";
+import { sendPickupWelcome, sendWelcomeEmail } from "@/lib/welcome";
 
 export async function POST(req: NextRequest) {
   try {
     await initDb();
-    const { name, email, password, role, phone, sells, invite, lang } = await req.json();
+    const body = await req.json();
+    const { name, email, password, phone, sells, invite, lang } = body;
+    // Accounts made on pickup.zolahq.com are ordinary Zola accounts (buyer side; they can switch later)
+    const fromPickup = body.site === "pickup";
+    const role = fromPickup ? "buyer" : body.role;
+    if (fromPickup && String(phone || "").replace(/\D/g, "").length < 9)
+      return NextResponse.json({ error: "Enter your phone number" }, { status: 400 });
 
     if (!name || !email || !password || !role)
       return NextResponse.json({ error: "Please fill in all the fields" }, { status: 400 });
@@ -54,6 +60,7 @@ export async function POST(req: NextRequest) {
       ...(role === "vendor" && ["goods", "services", "both"].includes(sells) ? { sells } : {}),
       rating:      5.0,
       trade_count: 0,
+      ...(fromPickup ? { joined_via: "pickup" } : {}),
       created_at:  new Date().toISOString(),
     });
 
@@ -64,7 +71,8 @@ export async function POST(req: NextRequest) {
     const claimed = await claimInvitedTrades(db, { id, name, email: email.toLowerCase(), phone: cleanPhone, avatar, role }, invite);
 
     // Welcome email, in their language (never blocks the signup)
-    await sendWelcomeEmail({ name, email: email.toLowerCase(), role, lang: userLang });
+    if (fromPickup) await sendPickupWelcome({ name, email: email.toLowerCase(), lang: userLang });
+    else await sendWelcomeEmail({ name, email: email.toLowerCase(), role, lang: userLang });
 
     const res = NextResponse.json({ user, success: true, tradeId: claimed[0] || null, waiting: claimed.length });
     res.cookies.set("st_token", token, {

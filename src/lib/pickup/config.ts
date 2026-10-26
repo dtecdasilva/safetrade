@@ -37,6 +37,11 @@ export function maxPackageValue(balance: number): number {
   return Math.floor((Number(balance) || 0) * VALUE_RATIO);
 }
 
+/** What a rider may carry. Riders the admin marked "no limit" can carry anything. */
+export function riderMax(r: { balance?: number; no_limit?: boolean }): number {
+  return r?.no_limit ? Number.POSITIVE_INFINITY : maxPackageValue(Number(r?.balance) || 0);
+}
+
 /** The balance needed to carry a package of this value. */
 export function balanceNeeded(value: number): number {
   return Math.ceil((Number(value) || 0) / VALUE_RATIO);
@@ -155,4 +160,9 @@ export function pickupUrl(): string {
 /** "Open in Google Maps" for a point: works on any phone, nothing to install. */
 export function mapsLink(p: Point): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+}
+
+/** Where to go after signing in on Pickup: only a page on this site. */
+export function safeNext(n: string | null): string {
+  return n && /^\/[a-zA-Z0-9/_?=&%-]*$/.test(n) && !n.startsWith("//") ? n : "/send";
 }

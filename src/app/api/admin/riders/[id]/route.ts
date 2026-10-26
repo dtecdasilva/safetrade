@@ -4,10 +4,12 @@ import { getSession } from "@/lib/auth";
 import { moveRiderMoney, retryWaiting } from "@/lib/pickup/deliveries";
 import { sendEmail, emailLayout } from "@/lib/mail";
 import { pickupUrl } from "@/lib/pickup/config";
+import { makeSetupLink } from "@/lib/pickup/setup";
 
 /**
- * Admin: approve or suspend a rider, or change their balance (for example to
- * charge them for a lost or damaged parcel). Every change is written to the
+ * Admin: approve or suspend a rider, change their balance (for example to
+ * charge them for a lost or damaged parcel), turn "no limit" on or off, or
+ * make a new link for them to set their password. Every change is written to the
  * rider's history.
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -18,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const ref = db.collection("riders").doc(params.id);
     const r = (await ref.get()).data();
     if (!r) return NextResponse.json({ error: "Rider not found" }, { status: 404 });
-    const { action, amount, note } = await req.json().catch(() => ({}));
+    const { action, amount, note, noLimit } = await req.json().catch(() => ({}));
     const now = new Date().toISOString();
 
     if (action === "approve") {
@@ -56,6 +58,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         if (e.message === "NEGATIVE_BALANCE") return NextResponse.json({ error: "That would take the balance below zero" }, { status: 400 });
         throw e;
       }
+    }
+    if (action === "limit") {
+      // No limit: they get any parcel, whatever their balance
+      await ref.update({ no_limit: !!noLimit, updated_at: now });
+      if (noLimit) await retryWaiting(db, r.city);
+      return NextResponse.json({ success: true });
+    }
+    if (action === "setup_link") {
+      // A new link to set (or reset) their password; the old link stops working
+      return NextResponse.json({ success: true, link: await makeSetupLink(db, params.id), name: r.name, phone: r.phone });
     }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e: any) {

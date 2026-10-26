@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>You're offline · Pickup</title>
+<style>
+  :root { --bg: #F8FAFC; --ink: #102A43; --ink-2: #54708A; --accent: #F08A24; --surface: #FFFFFF; --line: #D9E2EC; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #131514; --ink: #EEF1EE; --ink-2: #969E98; --accent: #F5A04A; --surface: #1C1F1D; --line: #2F3431; } }
+  * { box-sizing: border-box; margin: 0; }
+  body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg); color: var(--ink); font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; }
+  main { width: 100%; max-width: 400px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 32px 26px; text-align: center; }
+  .mark { color: var(--accent); display: inline-block; margin-bottom: 18px; }
+  h1 { font-size: 23px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; }
+  p { color: var(--ink-2); font-size: 15.5px; margin-top: 10px; }
+  button { margin-top: 24px; width: 100%; min-height: 46px; border: 0; border-radius: 10px; background: #E07A14; color: #fff; font: inherit; font-weight: 600; font-size: 15.5px; cursor: pointer; }
+  button:hover { background: #C96A0E; }
+  .help { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 14px; }
+  .help a { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <span class="mark"><svg viewBox="0 0 32 32" width="56" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#F08A24"/><path d="M16 5.6c-4.4 0-8 3.4-8 7.7 0 5.6 8 12.9 8 12.9s8-7.3 8-12.9c0-4.3-3.6-7.7-8-7.7z" fill="#fff"/><rect x="12.7" y="10.2" width="6.6" height="6" rx="0.9" fill="#F08A24"/><path d="M16 10.2v2.3" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+  <div data-lang="en">
+    <h1>You're offline</h1>
+    <p>Pickup needs an internet connection to show your deliveries and the map. Nothing has been lost: your deliveries carry on.</p>
+    <button type="button" onclick="location.reload()">Try again</button>
+    <p class="help">Need help? WhatsApp <a href="https://wa.me/237671543308">+237 671 543 308</a> or call <a href="tel:+237671534224">+237 671 534 224</a>.</p>
+  </div>
+  <div data-lang="fr" hidden>
+    <h1>Vous êtes hors ligne</h1>
+    <p>Pickup a besoin d'une connexion internet pour afficher vos livraisons et la carte. Rien n'est perdu : vos livraisons continuent.</p>
+    <button type="button" onclick="location.reload()">Réessayer</button>
+    <p class="help">Besoin d'aide ? WhatsApp <a href="https://wa.me/237671543308">+237 671 543 308</a> ou appelez le <a href="tel:+237671534224">+237 671 534 224</a>.</p>
+  </div>
+</main>
+<script>
+  // Same language as the rest of the site: the saved choice, otherwise the phone's language
+  (function () {
+    var m = document.cookie.match(/(?:^|; )zola-lang=(en|fr)/);
+    var lang = m ? m[1] : ((navigator.language || "").toLowerCase().indexOf("fr") === 0 ? "fr" : "en");
+    if (lang === "fr") {
+      document.documentElement.lang = "fr";
+      document.title = "Vous êtes hors ligne · Pickup";
+      document.querySelector('[data-lang="en"]').hidden = true;
+      document.querySelector('[data-lang="fr"]').hidden = false;
+    }
+  })();
+</script>
+</body>
+</html>

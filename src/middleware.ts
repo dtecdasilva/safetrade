@@ -10,6 +10,14 @@ export function middleware(req: NextRequest) {
   const isPickup = host.startsWith("pickup.");
   const { pathname } = req.nextUrl;
 
+  // Pickup installs as its own app: its own manifest and browser-tab icon
+  if (pathname === "/manifest.webmanifest" || pathname === "/favicon.ico") {
+    if (!isPickup) return NextResponse.next();
+    const url = req.nextUrl.clone();
+    url.pathname = pathname === "/favicon.ico" ? "/pickup/favicon.ico" : "/pickup/manifest.webmanifest";
+    return NextResponse.rewrite(url);
+  }
+
   if (isPickup && !pathname.startsWith("/pickup")) {
     const url = req.nextUrl.clone();
     url.pathname = `/pickup${pathname === "/" ? "" : pathname}`;
@@ -27,5 +35,5 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   // Pages only: not API routes, Next.js files, or anything with a file extension
-  matcher: ["/((?!api|_next|.*\\..*).*)"],
+  matcher: ["/((?!api|_next|.*\\..*).*)", "/manifest.webmanifest", "/favicon.ico"],
 };

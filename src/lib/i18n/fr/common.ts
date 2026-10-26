@@ -156,5 +156,7 @@ export const common: Record<string, string> = {
   "Admin accounts don't have a wallet": "Les comptes admin n'ont pas de portefeuille",
   "Start a transaction with your seller's number, or wait for a seller to create one for you. It will appear here.": "Lancez une transaction avec le numéro de votre vendeur, ou attendez qu'un vendeur en crée une pour vous. Elle apparaîtra ici.",
   "Everything you're selling, newest first.": "Tout ce que vous vendez, du plus récent au plus ancien.",
-  "Everything you're buying, newest first.": "Tout ce que vous achetez, du plus récent au plus ancien."
+  "Everything you're buying, newest first.": "Tout ce que vous achetez, du plus récent au plus ancien.",
+  "Install Pickup": "Installer Pickup",
+  "Add Pickup to your home screen": "Ajoutez Pickup à votre écran d’accueil"
 };

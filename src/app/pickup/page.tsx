@@ -4,10 +4,12 @@ import { Bike, Wallet, MapPin, PackageCheck } from "lucide-react";
 import { getT } from "@/lib/i18n/server";
 import TrackBox from "@/components/pickup/TrackBox";
 import { VALUE_RATIO } from "@/lib/pickup/config";
+import { getSession } from "@/lib/auth";
 
 /** pickup.zolahq.com: for riders, and for buyers following a parcel. */
-export default function PickupHome() {
+export default async function PickupHome() {
   const { t } = getT();
+  const session = await getSession();
   const base = (headers().get("host") || "").toLowerCase().startsWith("pickup.") ? "" : "/pickup";
   const steps = [
     { icon: <Wallet size={18} />, title: t("Top up your balance"), text: t("Your balance is your guarantee. With FCFA 5,000 you can carry parcels worth up to FCFA {max}.", { max: (5000 * VALUE_RATIO).toLocaleString("en-US") }) },
@@ -22,12 +24,15 @@ export default function PickupHome() {
         <p>{t("Pickup delivers parcels, shop orders, appliances and more. A checked rider collects it, you follow it on the map, and you only pay by distance.")}</p>
         <div className="pk-actions">
           <Link href={`${base}/send`} className="btn btn-primary btn-lg">{t("Send a parcel")}</Link>
+          {session
+            ? <Link href={`${base}/my`} className="btn btn-secondary btn-lg">{t("My deliveries")}</Link>
+            : <Link href={`${base}/join`} className="btn btn-secondary btn-lg">{t("Create an account")}</Link>}
         </div>
       </section>
 
       <section className="pk-card">
         <h2 className="pk-h2">{t("Track a parcel")}</h2>
-        <p className="hint" style={{ marginBottom: 10 }}>{t("Enter the tracking code from your Zola transaction.")}</p>
+        <p className="hint" style={{ marginBottom: 10 }}>{t("Enter the tracking code from your Zola transaction or the sender's message.")}</p>
         <TrackBox />
       </section>
 

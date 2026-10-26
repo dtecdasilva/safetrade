@@ -1,6 +1,7 @@
 /**
  * Deliveries booked straight on Pickup, with no Zola transaction: by anyone
- * on pickup.zolahq.com/send, or by a Zola admin for a client.
+ * with a Pickup account on pickup.zolahq.com/send, or by a Zola admin for a
+ * client (the client needs no account: they pay through the link).
  *
  * The person booking (or the client) pays the delivery fee by mobile money.
  * Until then the delivery waits as "awaiting_payment" and no rider is used.
@@ -70,7 +71,7 @@ export async function readBooking(db: any, b: any): Promise<{ error?: string; va
 }
 
 /** Save a booking. It waits for payment before any rider is involved. */
-export async function createDirect(db: any, v: any, opts: { by: "public" | "admin"; adminName?: string; preferredRider?: string; fee?: number; lang?: string }) {
+export async function createDirect(db: any, v: any, opts: { by: "public" | "admin"; adminName?: string; preferredRider?: string; fee?: number; lang?: string; senderId?: string }) {
   const id = `${DIRECT_PREFIX}${randomBytes(12).toString("hex")}`;
   const fee = opts.fee && opts.fee > 0 ? Math.round(opts.fee) : v.fee;
   const d = {
@@ -78,6 +79,8 @@ export async function createDirect(db: any, v: any, opts: { by: "public" | "admi
     kind: "direct",
     trade_id: null,
     created_by: opts.by,
+    // The Pickup account that booked it (admin-made deliveries for clients have none)
+    sender_id: opts.senderId || null,
     ...(opts.adminName ? { created_by_admin: opts.adminName } : {}),
     manage_key: randomBytes(16).toString("hex"),
     track_code: trackCode(),

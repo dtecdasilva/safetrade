@@ -48,7 +48,7 @@ export async function GET() {
       .sort((a: any, b: any) => (b.delivered_at > a.delivered_at ? 1 : -1)).slice(0, 10)
       .map((d: any) => ({ trade_id: d.trade_id, title: d.title, delivered_at: d.delivered_at, rider_pay: d.rider_pay, city: originOf(d)?.city || d.city }));
 
-    return NextResponse.json({ rider: publicRider(rider), maxValue: maxPackageValue(rider.balance), job, ledger, withdrawals, done });
+    return NextResponse.json({ rider: publicRider(rider), maxValue: maxPackageValue(rider.balance), noLimit: !!rider.no_limit, job, ledger, withdrawals, done });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

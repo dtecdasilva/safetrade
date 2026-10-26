@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LocateFixed, Send } from "lucide-react";
+import { LocateFixed, Send, UserRound } from "lucide-react";
 import { useT } from "@/components/I18n";
 import { usePk } from "@/components/pickup/Base";
 import { PhoneField } from "@/components/ui";
@@ -10,15 +11,17 @@ import PlaceSearch from "@/components/pickup/PlaceSearch";
 import OriginPicker, { OriginValue, originReady } from "@/components/pickup/OriginPicker";
 import { money } from "@/lib/zola";
 
+/** Book a delivery: what, from where, to where, who receives it. Pay on the next page. */
 const SAVED = "pickup-sender";
 
-/** Book a delivery: what, from where, to where, who receives it. Pay on the next page. */
 export default function SendPage() {
   const { t, lang } = useT();
   const pk = usePk();
   const router = useRouter();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [form, setForm] = useState({ title: "", value: "", destLandmark: "", recipientName: "", recipientPhone: "", senderName: "", senderPhone: "", senderEmail: "" });
+  // The signed-in sender (false = not signed in)
+  const [me, setMe] = useState<{ name: string; phone: string; email: string } | false | null>(null);
   const [origin, setOrigin] = useState<OriginValue>({ deliveryMode: "same_city" });
   const [dest, setDest] = useState<{ lat: number; lng: number } | null>(null);
   const [price, setPrice] = useState<{ km: number; fee: number } | null>(null);
@@ -26,9 +29,14 @@ export default function SendPage() {
   const [busy, setBusy] = useState(false);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  // Your own details, remembered on this phone only
+  // Signed in? Then their details come from the account. Otherwise they type them (an account is optional).
   useEffect(() => {
     try { const s = JSON.parse(localStorage.getItem(SAVED) || "null"); if (s) setForm((f) => ({ ...f, ...s })); } catch {}
+    fetch("/api/profile", { cache: "no-store" }).then(async (r) => {
+      if (!r.ok) { setMe(false); return; }
+      const d = await r.json(); const p = d.profile || {};
+      setMe({ name: p.name || "", phone: p.phone || "", email: p.email || "" });
+    }).catch(() => setMe(false));
   }, []);
 
   // The price, as soon as both places are known
@@ -54,7 +62,7 @@ export default function SendPage() {
         body: JSON.stringify({ ...form, ...origin, value: Number(form.value || 0), destLat: dest?.lat, destLng: dest?.lng, lang }) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setError(d.error || "Something went wrong. Please try again."); return; }
-      try { localStorage.setItem(SAVED, JSON.stringify({ senderName: form.senderName, senderPhone: form.senderPhone, senderEmail: form.senderEmail })); } catch {}
+      if (!me) { try { localStorage.setItem(SAVED, JSON.stringify({ senderName: form.senderName, senderPhone: form.senderPhone, senderEmail: form.senderEmail })); } catch {} }
       router.push(pk(`/d/${d.id}?k=${d.key}`));
     } catch { setError("Something went wrong. Check your connection and try again."); }
     finally { setBusy(false); }
@@ -62,8 +70,9 @@ export default function SendPage() {
 
   if (enabled === false) return <section className="pk-card pk-narrow"><h1 className="pk-h1">{t("Send a parcel")}</h1><p className="notice notice-wait">{t("Pickup isn't taking deliveries yet. Check back soon.")}</p></section>;
 
+  if (me === null) return <div className="pk-card" style={{ display: "flex", justifyContent: "center", padding: 40 }}><span className="spinner" /></div>;
   const ready = form.title.trim().length >= 2 && originReady(origin) && !!dest && form.destLandmark.trim().length >= 3
-    && form.recipientName.trim().length >= 2 && form.recipientPhone.length >= 9 && form.senderName.trim().length >= 2 && form.senderPhone.length >= 9;
+    && form.recipientName.trim().length >= 2 && form.recipientPhone.length >= 9 && (me ? (!!me.phone || form.senderPhone.length >= 9) : form.senderName.trim().length >= 2 && form.senderPhone.length >= 9);
 
   return (
     <form onSubmit={submit} className="pk-app">
@@ -105,16 +114,29 @@ export default function SendPage() {
         </div>
       </section>
 
-      <section className="pk-card">
-        <h2 className="pk-h2">{t("Your details")}</h2>
-        <div className="stack" style={{ gap: 10 }}>
-          <div className="form-grid-2">
-            <div className="field"><label className="label" htmlFor="sn">{t("Your name")}</label><input id="sn" className="input" autoComplete="name" value={form.senderName} onChange={(e) => set("senderName", e.target.value)} /></div>
-            <div className="field"><label className="label" htmlFor="sp">{t("Your phone")}</label><PhoneField id="sp" value={form.senderPhone} onChange={(v) => set("senderPhone", v)} /></div>
+      {me ? (
+        <section className="pk-card">
+          <div className="kv" style={{ alignItems: "center" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><UserRound size={16} /> {t("Sending as")}</span>
+            <span style={{ textAlign: "right" }}><strong>{me.name}</strong>{me.phone && <><br /><span className="hint num">+237 {me.phone}</span></>}</span>
           </div>
-          <div className="field"><label className="label" htmlFor="se">{t("Email (optional, for updates)")}</label><input id="se" className="input" type="email" autoComplete="email" value={form.senderEmail} onChange={(e) => set("senderEmail", e.target.value)} /></div>
-        </div>
-      </section>
+          {!me.phone && (
+            <div className="field" style={{ marginTop: 10 }}><label className="label" htmlFor="sp">{t("Your phone")}</label><PhoneField id="sp" value={form.senderPhone} onChange={(v) => set("senderPhone", v)} /></div>
+          )}
+        </section>
+      ) : (
+        <section className="pk-card">
+          <h2 className="pk-h2">{t("Your details")}</h2>
+          <p className="hint" style={{ marginBottom: 10 }}>{t("No account needed.")} <Link href={pk("/signin")}>{t("Sign in")}</Link> {t("or")} <Link href={pk("/join")}>{t("create an account")}</Link> {t("to keep all your deliveries in one place.")}</p>
+          <div className="stack" style={{ gap: 10 }}>
+            <div className="form-grid-2">
+              <div className="field"><label className="label" htmlFor="sn">{t("Your name")}</label><input id="sn" className="input" autoComplete="name" value={form.senderName} onChange={(e) => set("senderName", e.target.value)} /></div>
+              <div className="field"><label className="label" htmlFor="sp">{t("Your phone")}</label><PhoneField id="sp" value={form.senderPhone} onChange={(v) => set("senderPhone", v)} /></div>
+            </div>
+            <div className="field"><label className="label" htmlFor="se">{t("Email (optional, for updates)")}</label><input id="se" className="input" type="email" autoComplete="email" value={form.senderEmail} onChange={(e) => set("senderEmail", e.target.value)} /></div>
+          </div>
+        </section>
+      )}
 
       <section className="pk-card pk-price">
         {price ? (

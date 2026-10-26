@@ -234,7 +234,7 @@ export default function RiderApp() {
             <p className="pk-h2" style={{ margin: 0 }}><Bike size={18} /> {rider.available ? t("You're available") : t("You're not available")}</p>
             <p className="hint">
               {rider.available
-                ? (data.maxValue > 0 ? t("Pickup will give you the next parcel near you. Keep this page open.") : t("Top up your balance to start getting parcels."))
+                ? (data.noLimit || data.maxValue > 0 ? t("Pickup will give you the next parcel near you. Keep this page open.") : t("Top up your balance to start getting parcels."))
                 : t("Switch on when you're ready to take a parcel.")}
             </p>
             {rider.available && locState === "blocked" && <p className="hint-error">{t("Location is blocked. Allow it for this site so we can give you parcels near you.")}</p>}
@@ -249,7 +249,9 @@ export default function RiderApp() {
       <section className="pk-card">
         <p className="stat-label"><Wallet size={15} /> {t("Balance")}</p>
         <p className="amount-xl">{money(rider.balance)}</p>
-        <p className="hint">{t("You can carry parcels worth up to {max}.", { max: money(data.maxValue) })} {t("To carry a FCFA 10,000 parcel you need {need}.", { need: money(balanceNeeded(10000)) })}</p>
+        {data.noLimit
+          ? <p className="hint">{t("Zola has removed the balance limit for you: you can carry any parcel, with no top-up needed. Your earnings still go into this balance.")}</p>
+          : <p className="hint">{t("You can carry parcels worth up to {max}.", { max: money(data.maxValue) })} {t("To carry a FCFA 10,000 parcel you need {need}.", { need: money(balanceNeeded(10000)) })}</p>}
 
         <hr className="divider" />
         <p className="label">{t("Top up")}</p>

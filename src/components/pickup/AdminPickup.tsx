@@ -198,6 +198,13 @@ function Riders() {
   const [err, setErr] = useState("");
   const [adj, setAdj] = useState<{ id: string; name: string } | null>(null);
   const [adjForm, setAdjForm] = useState({ amount: "", note: "" });
+  const [adding, setAdding] = useState(false);
+  const [nr, setNr] = useState({ name: "", phone: "", email: "", city: "", noLimit: true });
+  const [nrBase, setNrBase] = useState<{ lat: number; lng: number } | null>(null);
+  const [cities, setCities] = useState<string[]>([]);
+  const [link, setLink] = useState<{ name: string; phone: string; link: string } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  useEffect(() => { fetch("/api/pickup/cities").then((r) => r.json()).then((d) => setCities(d.cities || [])).catch(() => {}); }, []);
   const load = useCallback(() => { fetch("/api/admin/riders").then((r) => r.json()).then(setData).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -206,8 +213,14 @@ function Riders() {
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setErr(d.error || "That didn't go through. Please try again."); return false; }
-    load(); return true;
+    load(); return d;
   }
+  async function addRider() {
+    const d = await post("/api/admin/riders", { ...nr, baseLat: nrBase?.lat, baseLng: nrBase?.lng });
+    if (d) { setLink(d); setAdding(false); setNr({ name: "", phone: "", email: "", city: "", noLimit: true }); setNrBase(null); }
+  }
+  async function newLink(id: string) { const d = await post(`/api/admin/riders/${id}`, { action: "setup_link" }); if (d) setLink(d); }
+  const linkMsg = (l: any) => `Hello ${String(l.name).split(" ")[0]}, Zola has made you a Pickup rider. Open this link to set your password and start delivering: ${l.link}`;
 
   if (!data) return <div className="card empty"><span className="spinner" /></div>;
   const riders: any[] = data.riders || [];
@@ -220,8 +233,53 @@ function Riders() {
 
   return (
     <div className="fade-up stack" style={{ gap: 14 }}>
-      <p className="hint">Riders sign up at <a href={pickupUrl()} target="_blank" rel="noopener noreferrer">{pickupUrl().replace(/^https?:\/\//, "")}</a>. Check their national ID in person before approving. A rider can carry parcels worth up to 70% of their balance, one at a time. You can still assign a parcel over that limit from Deliveries (Assign rider) or the transaction page.</p>
+      <p className="hint">Riders sign up themselves at <a href={pickupUrl()} target="_blank" rel="noopener noreferrer">{pickupUrl().replace(/^https?:\/\//, "")}</a>. Check their national ID in person before approving. A rider can carry parcels worth up to 70% of their balance, one at a time. You can still assign a parcel over that limit from Deliveries (Assign rider) or the transaction page. Riders you add yourself can have no limit at all.</p>
       {err && <div className="notice notice-danger" role="alert">{err}</div>}
+
+      {link && (
+        <div className="card card-pad card-mint">
+          <h2 className="section-title">Send {link.name} their link</h2>
+          <p className="hint" style={{ margin: "4px 0 10px" }}>They open it to set their password, then sign in with their number. It works once, for 7 days. Anyone with this link can take over the account, so send it only to them.</p>
+          <p className="num" style={{ overflowWrap: "anywhere", fontSize: 13.5, marginBottom: 10 }}>{link.link}</p>
+          <div className="btn-row">
+            <a className="btn btn-primary btn-sm" href={`https://wa.me/${intlDigits(link.phone)}?text=${encodeURIComponent(linkMsg(link))}`} target="_blank" rel="noopener noreferrer"><MessageCircle size={15} /> Send on WhatsApp</a>
+            <button className="btn btn-secondary btn-sm" onClick={async () => { try { await navigator.clipboard.writeText(link.link); setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); } catch {} }}><Copy size={15} /> {copiedLink ? "Copied" : "Copy link"}</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setLink(null)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {!adding && <button className="btn btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => { setAdding(true); setErr(""); }}><Plus size={16} /> Add a rider</button>}
+      {adding && (
+        <div className="card card-pad stack" style={{ gap: 12 }}>
+          <h2 className="section-title">Add a rider</h2>
+          <p className="hint">For people you trust, such as your own staff. They are approved straight away. You get a link to send them: they open it, choose a password, and they&apos;re in.</p>
+          <div className="form-grid-2">
+            <div className="field"><label className="label" htmlFor="nr-name">Full name</label><input id="nr-name" className="input" value={nr.name} onChange={(e) => setNr((f) => ({ ...f, name: e.target.value }))} /></div>
+            <div className="field"><label className="label" htmlFor="nr-phone">WhatsApp number</label><PhoneField id="nr-phone" value={nr.phone} onChange={(v) => setNr((f) => ({ ...f, phone: v }))} /></div>
+            <div className="field"><label className="label" htmlFor="nr-email">Email (optional)</label><input id="nr-email" className="input" type="email" value={nr.email} onChange={(e) => setNr((f) => ({ ...f, email: e.target.value }))} /></div>
+            <div className="field">
+              <label className="label" htmlFor="nr-city">City</label>
+              <input id="nr-city" className="input" list="nr-cities" value={nr.city} onChange={(e) => setNr((f) => ({ ...f, city: e.target.value }))} placeholder="Douala" />
+              <datalist id="nr-cities">{cities.map((c) => <option key={c} value={c} />)}</datalist>
+            </div>
+          </div>
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <input type="checkbox" checked={nr.noLimit} onChange={(e) => setNr((f) => ({ ...f, noLimit: e.target.checked }))} style={{ marginTop: 3 }} />
+            <span><strong>No balance limit.</strong> <span className="hint">They don&apos;t top up and can be given any parcel, whatever its value. If a parcel is lost, Zola carries the loss.</span></span>
+          </label>
+          <div className="field">
+            <span className="label">Where they usually start from (optional)</span>
+            <PlaceSearch city={nr.city || undefined} onPick={(p) => setNrBase({ lat: p.lat, lng: p.lng })} />
+            <PickupMap height={180} pick={nrBase} onPick={setNrBase} />
+            <p className="hint">Used to find the closest rider until their phone shares its location.</p>
+          </div>
+          <div className="btn-row">
+            <button className="btn btn-primary" disabled={nr.name.trim().length < 2 || nr.phone.length < 9 || !nr.city.trim()} onClick={addRider}>Add and get their link</button>
+            <button className="btn btn-secondary" onClick={() => setAdding(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {pendingW.length > 0 && (
         <div className="card card-pad card-wait">
@@ -257,11 +315,11 @@ function Riders() {
             <tbody>
               {riders.map((r) => (
                 <tr key={r.id}>
-                  <td className="strong">{r.name}<p className="hint num">+237{r.phone}</p></td>
+                  <td className="strong">{r.name}<p className="hint num">+237{r.phone}</p>{r.no_limit && <Pill tone="info">No limit</Pill>}{r.needs_setup && <p className="hint">Hasn&apos;t set a password yet</p>}</td>
                   <td>{r.city}</td>
                   <td><Pill tone={r.status === "approved" ? (r.available ? "ok" : "muted") : r.status === "pending" ? "wait" : "danger"}>{r.status === "approved" ? (r.available ? "Available" : "Off") : r.status === "pending" ? "To approve" : "Suspended"}</Pill></td>
                   <td className="num">{money(r.balance)}</td>
-                  <td className="num">{money(r.max_value)}</td>
+                  <td className="num">{r.no_limit ? "Anything" : money(r.max_value)}</td>
                   <td>{r.active_trade ? <a href={String(r.active_trade).startsWith("pkd_") ? "/admin?tab=deliveries" : `/trade/${r.active_trade}`}>Delivering</a> : "Free"}</td>
                   <td className="hint" suppressHydrationWarning>{ago(r.loc_at)}</td>
                   <td>
@@ -269,6 +327,8 @@ function Riders() {
                       {r.status !== "approved" && <button className="btn btn-primary btn-sm" onClick={() => post(`/api/admin/riders/${r.id}`, { action: "approve" })}><CheckCircle size={14} /> Approve</button>}
                       {r.status === "approved" && <button className="btn btn-danger-outline btn-sm" onClick={() => { if (confirm(`Suspend ${r.name}?`)) post(`/api/admin/riders/${r.id}`, { action: "suspend" }); }}><Ban size={14} /> Suspend</button>}
                       <button className="btn btn-secondary btn-sm" onClick={() => { setAdj({ id: r.id, name: r.name }); setAdjForm({ amount: "", note: "" }); }}>Balance</button>
+                      {r.status === "approved" && <button className="btn btn-secondary btn-sm" onClick={() => { if (r.no_limit || confirm(`Remove ${r.name}'s balance limit? They will be given any parcel, whatever its value, and Zola carries the loss if one is lost.`)) post(`/api/admin/riders/${r.id}`, { action: "limit", noLimit: !r.no_limit }); }}>{r.no_limit ? "Add limit back" : "No limit"}</button>}
+                      <button className="btn btn-ghost btn-sm" title="A new link to set or reset their password" onClick={() => newLink(r.id)}>Password link</button>
                     </div>
                   </td>
                 </tr>

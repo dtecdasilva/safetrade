@@ -20,7 +20,7 @@ import { sendEmail, emailLayout } from "@/lib/mail";
 import { sendNotifications, ADMIN_AUDIENCE } from "@/lib/notifications";
 import { prettyPhone, siteUrl } from "@/lib/support";
 import {
-  LOCATION_FRESH_MINUTES, Origin, Point, branchOrigin, distanceKm, isPoint, maxPackageValue, originOf, pickupUrl, riderPayFor,
+  LOCATION_FRESH_MINUTES, Origin, Point, branchOrigin, distanceKm, isPoint, maxPackageValue, originOf, riderMax, pickupUrl, riderPayFor,
 } from "@/lib/pickup/config";
 import { getPickupSettings } from "@/lib/pickup/settings";
 
@@ -184,7 +184,7 @@ export async function candidatesFor(db: any, d: any): Promise<Candidate[]> {
     if (!sameCity(r.city, o.city)) continue;                      // another city
     if (r.active_trade) continue;                                 // already has a package
     if ((d.declined || []).includes(r.id)) continue;              // said no to this one
-    if (maxPackageValue(r.balance) < Number(d.amount)) continue;  // balance too low for its value
+    if (riderMax(r) < Number(d.amount)) continue;                 // balance too low for its value (no-limit riders always pass)
     const pos = riderPosition(r);
     out.push({ rider: r, km: pos && isPoint(branch) ? distanceKm(pos, branch) : null });
   }
@@ -212,8 +212,8 @@ export async function adminChoices(db: any, d: any) {
     return {
       id: r.id, name: r.name, city: r.city, km, busy, available: !!r.available,
       same_city: o ? sameCity(r.city, o.city) : true,
-      max_value: maxPackageValue(r.balance),
-      can_carry: maxPackageValue(r.balance) >= Number(d.amount || 0),
+      max_value: maxPackageValue(r.balance), no_limit: !!r.no_limit,
+      can_carry: riderMax(r) >= Number(d.amount || 0),
     };
   });
   const rank = (c: any) => (c.busy ? 4 : 0) + (c.same_city ? 0 : 2) + (c.can_carry ? 0 : 1);
@@ -269,7 +269,7 @@ export async function assignRider(db: any, tradeId: string, opts: { riderId?: st
         rider_phone: rider.phone,
         assigned_at: nowIso(),
         assigned_by: opts.by || "auto",
-        over_limit: maxPackageValue(rider.balance) < Number(del.amount || 0),
+        over_limit: riderMax(rider) < Number(del.amount || 0),
         waiting_notified: false,
         history: history(del, "assigned", rider.name),
         updated_at: nowIso(),

@@ -957,10 +957,20 @@ img, svg { max-width: 100%; }
 .tag-flag { background: var(--error-tint); color: var(--error-ink); }
 
 /* ── Pickup (pickup.zolahq.com) ──────────────────────────────────────────── */
+/* Pickup has its own colour: orange instead of Zola's green (buttons, links, tinted panels) */
+.pk {
+  --emerald: #B85A08; --emerald-hover: #A04E06; --emerald-press: #7A3B00;
+  --accent: #B35500; --mint: #FFF2E5; --mint-line: #F6D2AC;
+}
+:root[data-theme="dark"] .pk { --emerald: #B85A08; --emerald-hover: #CC680F; --accent: #F5A04A; --mint: #252927; --mint-line: #2F3431; --emerald-press: #E3E8E4; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pk { --emerald: #B85A08; --emerald-hover: #CC680F; --accent: #F5A04A; --mint: #252927; --mint-line: #2F3431; --emerald-press: #E3E8E4; } }
+.pk .btn-primary:active { background: #8F4605; }
 .pk { min-height: 100vh; background: var(--bg); }
 .pk-top { position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 56px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--line-soft); }
 .pk-brand { display: inline-flex; align-items: center; gap: 8px; color: var(--navy); font-weight: 800; font-size: 19px; letter-spacing: -0.3px; text-decoration: none; }
 .pk-brand:hover { text-decoration: none; }
+.pk-top-right { display: flex; align-items: center; gap: 12px; }
+.pk-account { font-size: 14px; font-weight: 600; color: var(--navy); white-space: nowrap; }
 .pk-brand small { font-size: 12px; font-weight: 600; color: var(--ink-3); letter-spacing: 0; }
 .pk-main { max-width: 560px; margin: 0 auto; padding: 16px 16px 48px; }
 .pk-card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px 16px; margin-bottom: 14px; }
