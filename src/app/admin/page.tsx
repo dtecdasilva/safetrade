@@ -119,7 +119,7 @@ export default function AdminPage() {
     { key: "reports" as const,     label: `Reports${openReports.length > 0 ? ` (${openReports.length})` : ""}` },
     { key: "deliveries" as const,  label: "Deliveries" },
     { key: "riders" as const,      label: "Riders" },
-    { key: "agencies" as const,    label: "Agencies" },
+    { key: "agencies" as const,    label: "Cities" },
   ];
 
   if (loading || !user) return <PageLoader />;

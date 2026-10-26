@@ -22,12 +22,17 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
 }) {
   const { t, lang } = useT();
   const [receipt, setReceipt] = useState("");
+  const [agency, setAgency] = useState("");
   const [copied, setCopied] = useState(false);
   const [editSpot, setEditSpot] = useState(false);
   const branch = delivery?.branch || trade.dest_branch || null;
   const origin = delivery?.origin || trade.origin || (branch ? { label: `${branch.agency}, ${branch.name}`, city: branch.city } : null);
   const sameCity = (delivery?.mode || trade.delivery_mode) === "same_city";
-  const fromText = sameCity ? (viewer === "buyer" ? t("The seller, in {city}", { city: origin?.city || "" }) : `${origin?.label} (${origin?.city})`) : branch ? `${branch.agency}, ${branch.name} (${branch.city})` : "";
+  // Another city without a chosen branch: the seller sends it by any bus agency to the rider in that city
+  const sentAgency = delivery?.sent_agency || "";
+  const fromText = sameCity ? (viewer === "buyer" ? t("The seller, in {city}", { city: origin?.city || "" }) : `${origin?.label} (${origin?.city})`)
+    : branch ? `${branch.agency}, ${branch.name} (${branch.city})`
+    : sentAgency ? `${sentAgency} (${origin?.city || ""})` : t("A bus agency in {city}", { city: origin?.city || "" });
   const status: DeliveryStatus = delivery?.status || "waiting_rider";
   const label = t((DELIVERY_STATUS[status] || DELIVERY_STATUS.waiting_rider).label);
   const track = delivery?.track_code ? `${pickupUrl()}/track/${delivery.track_code}` : "";
@@ -42,7 +47,7 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
           <p style={{ fontSize: 14.5, margin: "2px 0 0", color: "var(--emerald-press)" }}>
             {sameCity
               ? t("We're finding a free Zola rider near your pickup spot. Their name and number will appear here, and we'll notify you.")
-              : t("We're finding a free Zola rider near {branch}. Their name and number will appear here, and we'll notify you. Don't send the parcel until then.", { branch: `${branch.agency}, ${branch.name}` })}
+              : t("We're finding a free Zola rider near {branch}. Their name and number will appear here, and we'll notify you. Don't send the parcel until then.", { branch: branch ? `${branch.agency}, ${branch.name}` : origin?.city || "" })}
           </p>
         </section>
       );
@@ -66,18 +71,26 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
       <section className="card card-pad card-mint tx-action fade-up" aria-labelledby="send-title">
         <h2 id="send-title" className="section-title">{t("Send the parcel to your Zola rider")}</h2>
         <p style={{ fontSize: 14.5, margin: "2px 0 14px", color: "var(--emerald-press)" }}>
-          {rich(t("The buyer has paid. Send it through <b>{agency}</b> to the <b>{branch}</b> branch in {city}, with this recipient:", { agency: branch.agency, branch: branch.name, city: branch.city }), { b: (c) => <strong>{c}</strong> })}
+          {branch
+            ? rich(t("The buyer has paid. Send it through <b>{agency}</b> to the <b>{branch}</b> branch in {city}, with this recipient:", { agency: branch.agency, branch: branch.name, city: branch.city }), { b: (c) => <strong>{c}</strong> })
+            : rich(t("The buyer has paid. Send it to <b>{city}</b> by any bus agency, with this recipient:", { city: origin?.city || "" }), { b: (c) => <strong>{c}</strong> })}
         </p>
         <div className="pk-recipient">
           <div><p className="label">{t("Recipient's name")}</p><p className="pk-big">{delivery.rider_name}</p></div>
           <div><p className="label">{t("Recipient's phone")}</p><p className="pk-big num">{prettyPhone(delivery.rider_phone)}</p></div>
         </div>
         <p className="hint" style={{ margin: "10px 0 14px" }}>{t("Don't write the buyer's name. Zola's rider collects it at the agency, checks it and brings it to the buyer.")}</p>
+        {!branch && (
+          <div className="field" style={{ marginBottom: 12 }}>
+            <label className="label" htmlFor="agency">{t("Agency you sent it with")}</label>
+            <input id="agency" className="input" maxLength={80} value={agency} onChange={(e) => setAgency(e.target.value)} placeholder={t("For example: Touristique Express")} />
+          </div>
+        )}
         <div className="field" style={{ marginBottom: 12 }}>
           <label className="label" htmlFor="receipt">{t("Agency receipt number")}</label>
           <input id="receipt" className="input num" maxLength={60} value={receipt} onChange={(e) => setReceipt(e.target.value)} placeholder={t("On the receipt the agency gives you")} />
         </div>
-        <button className="btn btn-primary" disabled={acting || receipt.trim().length < 3} onClick={() => act?.("ship", { trackingNumber: receipt.trim() })}>
+        <button className="btn btn-primary" disabled={acting || receipt.trim().length < 3 || (!branch && agency.trim().length < 2)} onClick={() => act?.("ship", { trackingNumber: receipt.trim(), agency: agency.trim() })}>
           <Send size={16} /> {acting ? t("Marking...") : t("I've sent it")}
         </button>
       </section>
@@ -93,7 +106,7 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
         <h2 id="delivery-title" className="section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}><Bike size={17} /> {t("Delivery by Pickup")}</h2>
         <span className="pk-tag" style={{ marginBottom: 0 }}>{label}</span>
       </div>
-      <div className="kv"><span>{sameCity ? t("Collected from") : t("Agency branch")}</span><span style={{ textAlign: "right" }}>{fromText}</span></div>
+      <div className="kv"><span>{sameCity ? t("Collected from") : branch ? t("Agency branch") : t("Arrives at")}</span><span style={{ textAlign: "right" }}>{fromText}</span></div>
       {delivery?.rider_name && <div className="kv"><span>{t("Rider")}</span><span>{delivery.rider_name}{delivery.rider_phone ? `, ${prettyPhone(delivery.rider_phone)}` : ""}</span></div>}
       {delivery?.receipt_no && <div className="kv"><span>{t("Agency receipt")}</span><span className="num">{delivery.receipt_no}</span></div>}
       {delivery?.delivered_at && <div className="kv"><span>{t("Delivered")}</span><span suppressHydrationWarning>{fmtDateTime(delivery.delivered_at, lang)}</span></div>}

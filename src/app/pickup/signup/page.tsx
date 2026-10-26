@@ -19,7 +19,7 @@ export default function RiderSignup() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch("/api/branches").then((r) => r.json()).then((d) => setCities(Array.from(new Set<string>((d.branches || []).map((b: any) => b.city))))).catch(() => {});
+    fetch("/api/pickup/cities").then((r) => r.json()).then((d) => setCities(d.cities || [])).catch(() => {});
   }, []);
 
   function locate() {

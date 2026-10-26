@@ -21,6 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const body = await req.json();
     const { action, trackingNumber, reason } = body;
+    const agencyName = String(body.agency || "").replace(/\s+/g, " ").trim().slice(0, 80);
     const db = getDb();
 
     const tradeDoc = await db.collection("trades").doc(params.id).get();
@@ -133,19 +134,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         // Same city: the rider collects it from the seller, nothing to send
         if (goods && trade.delivery_mode === "same_city")
           return NextResponse.json({ error: "Your Pickup rider collects this from you. Hand it over when they arrive." }, { status: 400 });
-        const delivery = goods && trade.dest_branch ? (await db.collection("deliveries").doc(params.id).get()).data() : null;
+        const delivery = goods && (trade.dest_branch || trade.delivery_mode === "out_of_town") ? (await db.collection("deliveries").doc(params.id).get()).data() : null;
         const receipt = String(trackingNumber || "").trim().slice(0, 60);
         if (delivery) {
           if (delivery.status === "waiting_rider")
             return NextResponse.json({ error: "Wait until a rider is assigned: you need their name to write on the parcel." }, { status: 400 });
+          if (!delivery.branch && agencyName.length < 2)
+            return NextResponse.json({ error: "Enter the name of the agency you sent it with" }, { status: 400 });
           if (receipt.length < 3)
             return NextResponse.json({ error: "Enter the receipt number the agency gave you" }, { status: 400 });
         }
 
         await updateTrade({ status: "shipped", tracking_number: receipt });
         if (delivery) {
-          await markSent(db, params.id, receipt);
-          await addEvent("Sent through the agency", `The seller sent the parcel through ${delivery.branch.agency} to ${delivery.rider_name}. Receipt: ${receipt}`, "info");
+          await markSent(db, params.id, receipt, agencyName);
+          await addEvent("Sent through the agency", `The seller sent the parcel through ${agencyName || delivery.branch?.agency || "a bus agency"} to ${delivery.rider_name}. Receipt: ${receipt}`, "info");
         } else {
           await addEvent(
             goods ? "Item sent to Zola" : "Marked as delivered",

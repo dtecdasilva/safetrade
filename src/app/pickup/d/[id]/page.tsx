@@ -22,6 +22,7 @@ export default function DirectDelivery() {
   const [waiting, setWaiting] = useState(false);
   const [msg, setMsg] = useState("");
   const [receipt, setReceipt] = useState("");
+  const [agency, setAgency] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -85,7 +86,7 @@ export default function DirectDelivery() {
         <p className="pk-tag">{t(meta.label)}</p>
         <h1 className="pk-h1" style={{ marginBottom: 6 }}>{d.title}</h1>
         <div className="kv"><span>{t("To")}</span><span style={{ textAlign: "right" }}>{d.recipient.name}, {prettyPhone(d.recipient.phone)}<br /><span className="hint">{d.dest.landmark}</span></span></div>
-        <div className="kv"><span>{t("From")}</span><span style={{ textAlign: "right" }}>{d.origin.label}{d.branch ? ` (${d.branch.city})` : ` (${d.origin.city})`}</span></div>
+        <div className="kv"><span>{t("From")}</span><span style={{ textAlign: "right" }}>{d.origin.kind === "city" ? t("By bus to {city}", { city: d.origin.city }) : <>{d.origin.label}{d.branch ? ` (${d.branch.city})` : ` (${d.origin.city})`}</>}</span></div>
         <div className="kv"><span>{t("Delivery price")}</span><strong>{money(d.fee)} <span className="hint">({d.km} km)</span></strong></div>
         <PickupMap markers={markers} height={240} follow="rider" />
       </section>
@@ -114,7 +115,7 @@ export default function DirectDelivery() {
 
       {/* Who's coming, or who to send it to */}
       {paid && d.status === "waiting_rider" && (
-        <section className="pk-card"><p className="hint">{sameCity ? t("Paid. We're finding a free rider near you. Their name and number will appear here.") : t("Paid. We're finding a free rider near {branch}. Don't send the parcel until their name appears here.", { branch: d.origin.label })}</p></section>
+        <section className="pk-card"><p className="hint">{sameCity ? t("Paid. We're finding a free rider near you. Their name and number will appear here.") : t("Paid. We're finding a free rider near {branch}. Don't send the parcel until their name appears here.", { branch: d.branch ? d.origin.label : d.origin.city })}</p></section>
       )}
       {d.status === "assigned" && sameCity && (
         <section className="pk-card card-mint">
@@ -129,20 +130,28 @@ export default function DirectDelivery() {
       {d.status === "assigned" && !sameCity && (
         <section className="pk-card card-mint">
           <h2 className="pk-h2">{t("Send the parcel to your Pickup rider")}</h2>
-          <p className="hint" style={{ marginBottom: 10 }}>{rich(t("Send it through <b>{agency}</b> to the <b>{branch}</b> branch in {city}, with this recipient:", { agency: d.branch.agency, branch: d.branch.name, city: d.branch.city }), { b: (c) => <strong>{c}</strong> })}</p>
+          <p className="hint" style={{ marginBottom: 10 }}>{d.branch
+            ? rich(t("Send it through <b>{agency}</b> to the <b>{branch}</b> branch in {city}, with this recipient:", { agency: d.branch.agency, branch: d.branch.name, city: d.branch.city }), { b: (c) => <strong>{c}</strong> })
+            : rich(t("Send it to <b>{city}</b> by any bus agency, with this recipient:", { city: d.origin.city }), { b: (c) => <strong>{c}</strong> })}</p>
           <div className="pk-recipient">
             <div><p className="label">{t("Recipient's name")}</p><p className="pk-big">{d.rider_name}</p></div>
             <div><p className="label">{t("Recipient's phone")}</p><p className="pk-big num">{prettyPhone(d.rider_phone)}</p></div>
           </div>
+          {!d.branch && (
+            <div className="field" style={{ margin: "12px 0 0" }}>
+              <label className="label" htmlFor="agency">{t("Agency you sent it with")}</label>
+              <input id="agency" className="input" maxLength={80} value={agency} onChange={(e) => setAgency(e.target.value)} placeholder={t("For example: Touristique Express")} />
+            </div>
+          )}
           <div className="field" style={{ margin: "12px 0" }}>
             <label className="label" htmlFor="receipt">{t("Agency receipt number")}</label>
             <input id="receipt" className="input num" maxLength={60} value={receipt} onChange={(e) => setReceipt(e.target.value)} placeholder={t("On the receipt the agency gives you")} />
           </div>
-          <button className="btn btn-primary" disabled={busy || receipt.trim().length < 3} onClick={() => post("sent", { receipt: receipt.trim() })}><Send size={16} /> {t("I've sent it")}</button>
+          <button className="btn btn-primary" disabled={busy || receipt.trim().length < 3 || (!d.branch && agency.trim().length < 2)} onClick={() => post("sent", { receipt: receipt.trim(), agency: agency.trim() })}><Send size={16} /> {t("I've sent it")}</button>
         </section>
       )}
       {["sent", "collected"].includes(d.status) && d.rider_name && (
-        <section className="pk-card"><div className="kv"><span>{t("Rider")}</span><span>{d.rider_name}, {prettyPhone(d.rider_phone)}</span></div>{d.receipt_no && <div className="kv"><span>{t("Agency receipt")}</span><span className="num">{d.receipt_no}</span></div>}</section>
+        <section className="pk-card"><div className="kv"><span>{t("Rider")}</span><span>{d.rider_name}, {prettyPhone(d.rider_phone)}</span></div>{d.sent_agency && <div className="kv"><span>{t("Agency")}</span><span>{d.sent_agency}</span></div>}{d.receipt_no && <div className="kv"><span>{t("Agency receipt")}</span><span className="num">{d.receipt_no}</span></div>}</section>
       )}
 
       {/* The code for the receiver */}

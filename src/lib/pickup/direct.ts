@@ -171,7 +171,7 @@ export function directView(d: any) {
   const paid = d.status !== "awaiting_payment";
   return {
     id: d.id, status: d.status, mode: d.mode, title: d.title, amount: d.amount, fee: d.fee, km: d.km,
-    origin: d.origin, branch: d.branch || null, dest: d.dest, sender: d.sender, recipient: d.recipient,
+    origin: d.origin, branch: d.branch || null, sent_agency: d.sent_agency || "", dest: d.dest, sender: d.sender, recipient: d.recipient,
     rider_name: d.rider_name || "", rider_phone: d.rider_phone || "",
     receipt_no: d.receipt_no || "", track_code: d.track_code,
     handover_code: paid ? d.handover_code : "",

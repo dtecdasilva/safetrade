@@ -2,24 +2,26 @@
 import { useEffect, useState } from "react";
 import { LocateFixed } from "lucide-react";
 import { useT } from "@/components/I18n";
-import BranchPicker from "@/components/pickup/BranchPicker";
 import PickupMap from "@/components/pickup/Map";
 import PlaceSearch from "@/components/pickup/PlaceSearch";
 
 /**
  * Where the Pickup rider collects the parcel:
  *   same city    a spot the sender marks on the map (their shop, their home)
- *   another city the bus agency branch in the receiver's city they send it to
- * The value is sent as is to the API (deliveryMode, originLat/Lng/City/Landmark, destBranchId).
+ *   another city the receiver's city: once paid, a rider there is chosen and the
+ *                sender sends it to them by any bus agency (no agency to pick)
+ * The value is sent as is to the API (deliveryMode, originLat/Lng/City/Landmark, destCity).
  */
 export interface OriginValue {
   deliveryMode: "same_city" | "out_of_town" | "";
   originLat?: number; originLng?: number; originCity?: string; originLandmark?: string;
+  destCity?: string;
+  /** Older transactions only */
   destBranchId?: string;
 }
 
 export function originReady(v: OriginValue): boolean {
-  if (v.deliveryMode === "out_of_town") return !!v.destBranchId;
+  if (v.deliveryMode === "out_of_town") return !!v.destCity || !!v.destBranchId;
   if (v.deliveryMode === "same_city") return Number.isFinite(v.originLat) && !!v.originCity && (v.originLandmark || "").trim().length >= 3;
   return false;
 }
@@ -99,8 +101,16 @@ export default function OriginPicker({
 
       {value.deliveryMode === "out_of_town" && (
         <>
-          <p className="hint">{who === "seller" ? t("You send it by bus agency to a branch in the buyer's city. A Pickup rider collects it there and delivers it.") : t("You send it by bus agency to a branch in the receiver's city. A Pickup rider collects it there and delivers it.")}</p>
-          <BranchPicker value={value.destBranchId || ""} onChange={(id) => set({ destBranchId: id })} idPrefix={`${idPrefix}-br`} />
+          <div className="field">
+            <label className="label" htmlFor={`${idPrefix}-dest`}>{who === "seller" ? t("Buyer's city") : t("Receiver's city")}</label>
+            <select id={`${idPrefix}-dest`} className="select" value={value.destCity || ""} onChange={(e) => set({ destCity: e.target.value, destBranchId: undefined })}>
+              <option value="">{t("Choose a city")}</option>
+              {info.cities.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <p className="hint">{who === "seller"
+            ? t("Once the buyer pays, we give you a Zola rider in that city. You send the parcel to them by any bus agency, and they deliver it to the buyer.")
+            : t("Once you pay, we give you a Pickup rider in that city. You send the parcel to them by any bus agency, and they deliver it.")}</p>
         </>
       )}
     </div>

@@ -396,7 +396,7 @@ export default function TradePage() {
       <section className="card card-pad tx-action fade-up" aria-labelledby="spot-title">
         <h2 id="spot-title" className="section-title">{t("Where should we deliver?")}</h2>
         <p className="hint" style={{ margin: "2px 0 14px" }}>
-          {t("A Zola rider brings it to you. The delivery price depends on the distance from {from}, so mark your spot first. You'll see the full total before you pay.", { from: trade.origin?.kind === "spot" ? (trade.origin.city || "") : trade.dest_branch ? `${trade.dest_branch.agency}, ${trade.dest_branch.name}` : "" })}
+          {t("A Zola rider brings it to you. The delivery price depends on the distance from {from}, so mark your spot first. You'll see the full total before you pay.", { from: trade.dest_branch ? `${trade.dest_branch.agency}, ${trade.dest_branch.name}` : (trade.origin?.city || "") })}
         </p>
         <DeliverySpot tradeId={trade.id} initial={null} onSaved={load} saveLabel={t("See the delivery price")} />
       </section>
@@ -1040,9 +1040,10 @@ export default function TradePage() {
                   ? <div className="kv"><span>{t("Delivery time")}</span><span>{Number(trade.delivery_days) === 1 ? t("1 day after payment") : t("{n} days after payment", { n: trade.delivery_days })}</span></div>
                   : null}
               {trade.dest_branch && <div className="kv"><span>{t("Sent to")}</span><span style={{ textAlign: "right" }}>{trade.dest_branch.agency}, {trade.dest_branch.name} ({trade.dest_branch.city})</span></div>}
+              {!trade.dest_branch && trade.delivery_mode === "out_of_town" && trade.origin?.city && <div className="kv"><span>{t("Buyer's city")}</span><span style={{ textAlign: "right" }}>{trade.origin.city}{delivery?.sent_agency ? ` (${delivery.sent_agency})` : ""}</span></div>}
               {trade.delivery_mode === "same_city" && trade.origin && <div className="kv"><span>{t("Collected from")}</span><span style={{ textAlign: "right" }}>{isVendor || isAdmin ? `${trade.origin.label} (${trade.origin.city})` : t("The seller, in {city}", { city: trade.origin.city })}</span></div>}
               {(trade.dest_branch || trade.origin) && delivery?.rider_name && isVendor && <div className="kv"><span>{t("Zola rider")}</span><span>{delivery.rider_name}</span></div>}
-              {trade.tracking_number && <div className="kv"><span>{trade.dest_branch ? t("Agency receipt") : t("Tracking number")}</span><span>{trade.tracking_number}</span></div>}
+              {trade.tracking_number && <div className="kv"><span>{trade.dest_branch || trade.delivery_mode === "out_of_town" ? t("Agency receipt") : t("Tracking number")}</span><span>{trade.tracking_number}</span></div>}
               {trade.created_at && <div className="kv"><span>{t("Created")}</span><span suppressHydrationWarning>{fmtDate(trade.created_at, lang)}</span></div>}
               {deliveryFee > 0 && !isVendor && !["complete", "cancelled"].includes(trade.status) && (
                 <p className="hint" style={{ marginTop: 10 }}>{t(DELIVERY_NOTE)}</p>

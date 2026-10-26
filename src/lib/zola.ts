@@ -208,11 +208,11 @@ export function statusStory(
               : isSeller
                 ? t("Your Zola rider comes to collect it from you. Have it packed and ready.")
                 : t("The Pickup rider collects it from the seller."))
-          : (trade as any).dest_branch && goods
+          : ((trade as any).dest_branch || (trade as any).delivery_mode === "out_of_town") && goods
           ? (isBuyer
               ? t("The seller sends your order through a bus agency, and a Zola rider brings it to you.")
               : isSeller
-                ? t("Send the parcel through the agency to your Zola rider, then enter the receipt number.")
+                ? t("Send the parcel by bus to your Zola rider, then enter the agency and the receipt number.")
                 : t("The seller sends it through the agency to the Pickup rider."))
           : isBuyer
           ? (goods ? t("The seller sends your order to Zola, and Zola delivers it to you.") : t("The seller needs to complete what you agreed."))

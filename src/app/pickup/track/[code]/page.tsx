@@ -39,11 +39,15 @@ export default function TrackPage() {
   const stepAt = steps.map(([, st]) => st === "paid" ? at("paid") || at("waiting_rider") : at(st));
 
   const sameCity = d.mode === "same_city";
+  // Where it arrives: the chosen branch (older deliveries), the agency the sender used, or the city
+  const arrive = d.branch ? `${d.branch.agency} ${d.branch.name}` : d.sent_agency ? `${d.sent_agency}, ${d.city}` : d.city;
   const line =
     d.status === "awaiting_payment" ? t("This delivery starts once it has been paid.")
-    : d.status === "waiting_rider" ? (sameCity ? t("We're finding a rider near the sender.") : t("We're finding a rider near {branch}.", { branch: `${d.branch.agency} ${d.branch.name}` }))
-    : d.status === "assigned" ? (sameCity ? t("{rider} is on the way to collect your parcel.", { rider: d.rider }) : t("{rider} will collect your parcel at {branch} once the seller sends it.", { rider: d.rider, branch: `${d.branch.agency} ${d.branch.name}` }))
-    : d.status === "sent" ? t("Your parcel is travelling with {agency} to the {branch} branch. {rider} collects it when it arrives.", { agency: d.branch.agency, branch: d.branch.name, rider: d.rider })
+    : d.status === "waiting_rider" ? (sameCity ? t("We're finding a rider near the sender.") : t("We're finding a rider near {branch}.", { branch: arrive }))
+    : d.status === "assigned" ? (sameCity ? t("{rider} is on the way to collect your parcel.", { rider: d.rider }) : t("{rider} will collect your parcel at {branch} once the seller sends it.", { rider: d.rider, branch: d.branch ? arrive : t("the bus agency in {city}", { city: d.city }) }))
+    : d.status === "sent" ? (d.branch
+        ? t("Your parcel is travelling with {agency} to the {branch} branch. {rider} collects it when it arrives.", { agency: d.branch.agency, branch: d.branch.name, rider: d.rider })
+        : t("Your parcel is travelling by bus to {city}{agency}. {rider} collects it when it arrives.", { city: d.city, agency: d.sent_agency ? ` (${d.sent_agency})` : "", rider: d.rider }))
     : d.status === "collected" ? t("{rider} has your parcel and is on the way.", { rider: d.rider })
     : d.status === "delivered" ? t("Your parcel was delivered.")
     : t("This delivery was cancelled.");
@@ -57,7 +61,7 @@ export default function TrackPage() {
         <PickupMap markers={markers} height={320} follow="rider" />
         {d.status === "collected" && !d.rider_loc && <p className="hint" style={{ marginTop: 8 }}>{t("The rider's location will appear here as they move.")}</p>}
         <div className="pk-legend">
-          <span><i className="pk-pin pk-pin-branch" /> {sameCity ? t("Pickup point") : t("Agency branch")}</span>
+          <span><i className="pk-pin pk-pin-branch" /> {sameCity ? t("Pickup point") : d.branch ? t("Agency branch") : t("City")}</span>
           <span><i className="pk-pin pk-pin-rider" /> {t("Rider")}</span>
           <span><i className="pk-pin pk-pin-dest" /> {t("You")}</span>
         </div>

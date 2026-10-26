@@ -3,7 +3,8 @@
  * parcel, and the delivery fee from the distance to the buyer.
  *
  *   same_city    the seller marks their pickup spot; no agency
- *   out_of_town  the seller sends it by bus agency to a branch in the buyer's city
+ *   out_of_town  the seller chooses the buyer's city and sends it by any bus
+ *                agency to the rider there (or, older ones, to a chosen branch)
  *
  * The fee is only known once the buyer has said where to deliver, so it is
  * worked out then, before the buyer pays. Until then delivery_pending is true.
@@ -11,18 +12,31 @@
 import { quote } from "@/lib/fees";
 import { DeliveryMode, Origin, branchOrigin, isPoint, quoteDelivery } from "@/lib/pickup/config";
 import { getPickupSettings, pickupCities } from "@/lib/pickup/settings";
+import { findCity, listCities } from "@/lib/pickup/cities";
 import { branchSnapshot, sameCity, tradeOrigin } from "@/lib/pickup/deliveries";
 
 export interface OriginChoice { mode?: DeliveryMode; origin?: Origin; branch?: any; error?: string }
 
+/** The point a parcel from another city is priced from: the centre of the buyer's city. */
+export function cityOrigin(c: { name: string; lat: number; lng: number }): Origin {
+  return { kind: "city", lat: c.lat, lng: c.lng, city: c.name, label: c.name };
+}
+
 /** Read the seller's choice from a form: same city (a map spot) or another city (an agency branch). */
 export async function originFromBody(db: any, body: any): Promise<OriginChoice> {
-  const mode: DeliveryMode | "" = body?.deliveryMode === "same_city" ? "same_city" : body?.deliveryMode === "out_of_town" || body?.destBranchId ? "out_of_town" : "";
+  const mode: DeliveryMode | "" = body?.deliveryMode === "same_city" ? "same_city" : body?.deliveryMode === "out_of_town" || body?.destBranchId || body?.destCity ? "out_of_town" : "";
   if (!mode) return { error: "Choose whether the buyer is in your city or in another city" };
   if (mode === "out_of_town") {
-    const branch = await branchSnapshot(db, body.destBranchId);
-    if (!branch) return { error: "Choose the agency branch you will send it to" };
-    return { mode, branch, origin: branchOrigin(branch) };
+    // Older forms: a chosen agency branch
+    if (body.destBranchId) {
+      const branch = await branchSnapshot(db, body.destBranchId);
+      if (!branch) return { error: "Choose the agency branch you will send it to" };
+      return { mode, branch, origin: branchOrigin(branch) };
+    }
+    // Now: just the buyer's city. The seller sends it by any bus agency to the rider there.
+    const city = await findCity(db, body.destCity);
+    if (!city) return { error: (await listCities(db)).length ? "Choose the buyer's city" : "Zola doesn't deliver in other cities yet" };
+    return { mode, origin: cityOrigin(city) };
   }
   const lat = Number(body.originLat), lng = Number(body.originLng);
   if (!isPoint({ lat, lng }) || (lat === 0 && lng === 0)) return { error: "Mark where the rider collects the parcel from you" };

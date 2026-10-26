@@ -14,7 +14,7 @@ export default async function PickupHome() {
   const steps = [
     { icon: <Wallet size={18} />, title: t("Top up your balance"), text: t("Your balance is your guarantee. With FCFA 5,000 you can carry parcels worth up to FCFA {max}.", { max: (5000 * VALUE_RATIO).toLocaleString("en-US") }) },
     { icon: <Bike size={18} />, title: t("Switch to available"), text: t("Pickup gives each parcel to the closest free rider. You carry one parcel at a time.") },
-    { icon: <MapPin size={18} />, title: t("Collect at the agency"), text: t("The seller sends the parcel in your name through a bus agency. You collect it at the branch.") },
+    { icon: <MapPin size={18} />, title: t("Collect the parcel"), text: t("In your city, you collect it from the sender. From another city, the sender sends it to you by bus and you collect it at the agency.") },
     { icon: <PackageCheck size={18} />, title: t("Deliver and get paid"), text: t("Bring it to the buyer, enter their 4-digit code, and the delivery fee is added to your balance.") },
   ];
   return (

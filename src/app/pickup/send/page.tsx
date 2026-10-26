@@ -43,7 +43,7 @@ export default function SendPage() {
   useEffect(() => {
     setPrice(null);
     if (!dest || !originReady({ ...origin, originLandmark: origin.originLandmark || "xxx" })) return;
-    const body = origin.deliveryMode === "out_of_town" ? { destBranchId: origin.destBranchId } : { originLat: origin.originLat, originLng: origin.originLng };
+    const body = origin.deliveryMode === "out_of_town" ? (origin.destCity ? { destCity: origin.destCity } : { destBranchId: origin.destBranchId }) : { originLat: origin.originLat, originLng: origin.originLng };
     const h = setTimeout(() => {
       fetch("/api/pickup/quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, destLat: dest.lat, destLng: dest.lng }) })
         .then((r) => r.json()).then((d) => { if (d.fee) setPrice(d); }).catch(() => {});

@@ -14,7 +14,17 @@ import AssignRider from "@/components/pickup/AssignRider";
 
 /** Admin tabs for Pickup: riders (approve, balance, withdrawals) and agency branches. Admin screens stay in English. */
 export default function AdminPickup({ tab }: { tab: "riders" | "agencies" | "deliveries" }) {
-  return tab === "riders" ? <Riders /> : tab === "deliveries" ? <Deliveries /> : <><Settings /><Agencies /></>;
+  return tab === "riders" ? <Riders /> : tab === "deliveries" ? <Deliveries /> : (
+    <>
+      <Cities />
+      <Settings />
+      <details className="card card-pad" style={{ marginTop: 14 }}>
+        <summary className="section-title" style={{ cursor: "pointer" }}>Agency branches (optional)</summary>
+        <p className="hint" style={{ margin: "6px 0 12px" }}>Not needed: sellers just choose the buyer&apos;s city and send by any bus agency. Older transactions that used a branch still show it.</p>
+        <Agencies />
+      </details>
+    </>
+  );
 }
 
 /* ── Prices and the on/off switch ─────────────────────────────────────────── */
@@ -78,7 +88,7 @@ function Deliveries() {
   useEffect(() => {
     setPrice(null);
     if (!dest) return;
-    const from = origin.deliveryMode === "out_of_town" ? (origin.destBranchId ? { destBranchId: origin.destBranchId } : null) : Number.isFinite(origin.originLat) ? { originLat: origin.originLat, originLng: origin.originLng } : null;
+    const from = origin.deliveryMode === "out_of_town" ? (origin.destCity ? { destCity: origin.destCity } : origin.destBranchId ? { destBranchId: origin.destBranchId } : null) : Number.isFinite(origin.originLat) ? { originLat: origin.originLat, originLng: origin.originLng } : null;
     if (!from) return;
     fetch("/api/pickup/quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...from, destLat: dest.lat, destLng: dest.lng }) })
       .then((r) => r.json()).then((d) => d.fee && setPrice(d)).catch(() => {});
@@ -370,7 +380,7 @@ function Agencies() {
 
   return (
     <div className="fade-up stack" style={{ gap: 14 }}>
-      <p className="hint">Sellers choose one of these branches when they create a transaction. Pickup gives the parcel to the closest free rider to the branch, so put each branch exactly on the map.</p>
+      <p className="hint">Branches you add here are only kept for older transactions. New transactions don&apos;t ask for one.</p>
       {!open && <button className="btn btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => { setOpen(true); setEditing(null); setForm(EMPTY); }}><Plus size={16} /> Add a branch</button>}
       {open && (
         <div className="card card-pad stack" style={{ gap: 12 }}>
@@ -426,6 +436,63 @@ function Agencies() {
           {list && list.length === 0 && <p className="empty empty-text">No branches yet. Until you add one, sellers arrange delivery with customer service as before.</p>}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The towns and cities Zola delivers in. Sellers and senders choose from these. */
+function Cities() {
+  const [list, setList] = useState<any[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(() => { fetch("/api/admin/cities").then((r) => r.json()).then((d) => setList(d.cities || [])).catch(() => setList([])); }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function post(body: any) {
+    setErr("");
+    const res = await fetch("/api/admin/cities", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setErr(d.error || "That didn't go through. Please try again."); return false; }
+    load(); return true;
+  }
+  async function save() { if (await post({ name, lat: pin?.lat, lng: pin?.lng })) { setOpen(false); setName(""); setPin(null); } }
+
+  return (
+    <div className="card card-pad stack fade-up" style={{ gap: 12, marginBottom: 14 }}>
+      <div>
+        <h2 className="section-title">Cities we deliver in</h2>
+        <p className="hint">Sellers and Pickup senders choose from these. Same city: a rider collects from the seller. Another city: the seller sends it by any bus agency to the rider in the buyer&apos;s city. The price for another city is worked out from the city centre you mark here to the buyer.</p>
+      </div>
+      {err && <div className="notice notice-danger" role="alert">{err}</div>}
+      {list && list.length > 0 && (
+        <div className="stack" style={{ gap: 0 }}>
+          {list.map((c) => (
+            <div key={c.id} className="kv" style={{ alignItems: "center", borderBottom: "1px solid var(--line-soft)" }}>
+              <span style={{ color: "var(--navy)", fontWeight: 600 }}>{c.name} {!c.active && <Pill tone="muted">Off</Pill>}</span>
+              <span style={{ display: "flex", gap: 6 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setOpen(true); setName(c.name); setPin({ lat: c.lat, lng: c.lng }); }}><Pencil size={14} /> Move centre</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => { if (c.active ? confirm(`Stop delivering in ${c.name}? Sellers won't be able to choose it for new transactions. Deliveries already started carry on.`) : true) post({ id: c.id, active: !c.active }); }}>{c.active ? "Switch off" : "Switch on"}</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {list && list.length === 0 && <p className="notice notice-wait">No cities yet. Add the towns and cities where you have riders, for example Douala and Yaoundé.</p>}
+      {!open && <button className="btn btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => { setOpen(true); setName(""); setPin(null); }}><Plus size={16} /> Add a city</button>}
+      {open && (
+        <div className="stack" style={{ gap: 10 }}>
+          <div className="field"><label className="label" htmlFor="city-name">City or town</label><input id="city-name" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Douala" /></div>
+          <PlaceSearch placeholder="Search the city to place it on the map" onPick={(p) => { setPin({ lat: p.lat, lng: p.lng }); if (!name.trim()) setName(p.name.split(",")[0]); }} />
+          <PickupMap height={200} pick={pin} onPick={setPin} />
+          <p className="hint">Search the city, or tap its centre on the map.</p>
+          <div className="btn-row">
+            <button className="btn btn-primary" disabled={name.trim().length < 2 || !pin} onClick={save}>Save city</button>
+            <button className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

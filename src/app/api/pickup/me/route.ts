@@ -23,7 +23,7 @@ export async function GET() {
         const withBuyer = d.status === "collected";
         job = {
           trade_id: d.trade_id, status: d.status, title: d.title, amount: d.amount, rider_pay: d.rider_pay,
-          branch: d.branch || null, origin: originOf(d), mode: d.mode || (d.branch ? "out_of_town" : "same_city"),
+          branch: d.branch || null, sent_agency: d.sent_agency || "", origin: originOf(d), mode: d.mode || (d.branch ? "out_of_town" : "same_city"),
           receipt_no: d.receipt_no || "", seller_name: d.seller_name,
           // Same city: the rider calls the seller to collect it
           seller_phone: (d.mode === "same_city") ? d.seller_phone || "" : "",

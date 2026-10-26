@@ -22,8 +22,9 @@ export async function GET(_req: NextRequest, { params }: { params: { code: strin
       mode: d.mode || (d.branch ? "out_of_town" : "same_city"),
       paid: d.status !== "awaiting_payment",
       branch: d.branch ? { agency: d.branch.agency, name: d.branch.name, city: d.branch.city } : null,
+      sent_agency: d.sent_agency || "", city: originOf(d)?.city || d.city || "",
       // Same city: show the area, not the sender's exact door
-      origin: (() => { const o = originOf(d)!; return d.branch ? { lat: o.lat, lng: o.lng, label: o.label, city: o.city } : { lat: Math.round(o.lat * 200) / 200, lng: Math.round(o.lng * 200) / 200, label: o.city, city: o.city }; })(),
+      origin: (() => { const o = originOf(d)!; return d.branch || o.kind === "city" ? { lat: o.lat, lng: o.lng, label: o.label, city: o.city } : { lat: Math.round(o.lat * 200) / 200, lng: Math.round(o.lng * 200) / 200, label: o.city, city: o.city }; })(),
       rider: d.rider_name ? String(d.rider_name).split(" ")[0] : "",
       rider_loc: moving ? d.rider_loc : null,
       dest: d.status !== "delivered" && isPoint(d.dest) ? { lat: d.dest.lat, lng: d.dest.lng } : null,

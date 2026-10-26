@@ -101,7 +101,8 @@ export type DeliveryMode = "same_city" | "out_of_town";
 
 /** Where the rider collects the parcel. */
 export interface Origin {
-  kind: "spot" | "branch";
+  /** spot: the sender's place (same city). branch: a chosen agency branch. city: the centre of the buyer's city (sent by any agency). */
+  kind: "spot" | "branch" | "city";
   lat: number; lng: number;
   city: string;
   /** "Touristique Express, Akwa" or the sender's landmark. */
