@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Bike, Copy, MapPinned, Send, RefreshCw, UserCheck, UserX } from "lucide-react";
+import { Bike, Copy, MapPinned, Send } from "lucide-react";
 import { useT, rich } from "@/components/I18n";
 import DeliverySpot from "@/components/pickup/DeliverySpot";
+import AssignRider from "@/components/pickup/AssignRider";
 import { DELIVERY_STATUS, DeliveryStatus, pickupUrl } from "@/lib/pickup/config";
 import { prettyPhone } from "@/lib/support";
 import { fmtDateTime } from "@/lib/zola";
@@ -23,9 +24,6 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
   const [receipt, setReceipt] = useState("");
   const [copied, setCopied] = useState(false);
   const [editSpot, setEditSpot] = useState(false);
-  const [cands, setCands] = useState<any[] | null>(null);
-  const [pick, setPick] = useState("");
-  const [msg, setMsg] = useState("");
   const branch = delivery?.branch || trade.dest_branch || null;
   const origin = delivery?.origin || trade.origin || (branch ? { label: `${branch.agency}, ${branch.name}`, city: branch.city } : null);
   const sameCity = (delivery?.mode || trade.delivery_mode) === "same_city";
@@ -33,20 +31,6 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
   const status: DeliveryStatus = delivery?.status || "waiting_rider";
   const label = t((DELIVERY_STATUS[status] || DELIVERY_STATUS.waiting_rider).label);
   const track = delivery?.track_code ? `${pickupUrl()}/track/${delivery.track_code}` : "";
-
-  useEffect(() => {
-    if (viewer !== "admin" || !["waiting_rider", "assigned"].includes(status)) return;
-    fetch(`/api/admin/deliveries/${trade.id}`).then((r) => r.json()).then((d) => setCands(d.candidates || [])).catch(() => setCands([]));
-  }, [viewer, status, trade.id]);
-
-  async function admin(action: string, riderId?: string) {
-    setMsg("");
-    const res = await fetch(`/api/admin/deliveries/${trade.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, riderId }) });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok) { setMsg(d.error || "That didn't go through. Please try again."); return; }
-    if (action === "auto" && !d.rider) setMsg("No free rider can take it yet.");
-    onChange();
-  }
 
   /* ── Seller: who to send it to ─────────────────────────────────────────── */
   if (viewer === "seller") {
@@ -142,25 +126,8 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
       {viewer === "admin" && delivery && (
         <>
           {delivery.track_code && <p className="hint" style={{ marginTop: 6 }}>Tracking: <a href={track} target="_blank" rel="noopener noreferrer">{delivery.track_code}</a></p>}
-          {["waiting_rider", "assigned"].includes(status) && (
-            <div className="stack" style={{ gap: 10, marginTop: 12 }}>
-              <div className="btn-row">
-                <button className="btn btn-secondary btn-sm" onClick={() => admin("auto")}><RefreshCw size={15} /> Find a free rider</button>
-                {status === "assigned" && <button className="btn btn-danger-outline btn-sm" onClick={() => admin("unassign")}><UserX size={15} /> Take it back from {delivery.rider_name}</button>}
-              </div>
-              {cands && cands.length > 0 && (
-                <div className="pk-row">
-                  <select className="select" value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Choose a rider">
-                    <option value="">Choose a free rider</option>
-                    {cands.map((c) => <option key={c.id} value={c.id}>{c.name}{c.km !== null ? `, ${c.km} km away` : ""}</option>)}
-                  </select>
-                  <button className="btn btn-secondary btn-sm" disabled={!pick} onClick={() => admin("assign", pick)}><UserCheck size={15} /> Assign</button>
-                </div>
-              )}
-              {cands && cands.length === 0 && <p className="hint">No free rider in {origin?.city} can carry this right now (free, available, and with enough balance).</p>}
-            </div>
-          )}
-          {msg && <p role="alert" className="hint-error" style={{ marginTop: 8 }}>{msg}</p>}
+          {delivery.over_limit && delivery.rider_id && <p className="notice notice-wait" style={{ marginTop: 8 }}>Assigned over {delivery.rider_name}&apos;s limit: their balance doesn&apos;t cover this parcel&apos;s value.</p>}
+          <AssignRider id={trade.id} status={status} riderName={delivery.rider_name} onDone={onChange} />
         </>
       )}
     </section>

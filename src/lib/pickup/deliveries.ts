@@ -196,6 +196,30 @@ export async function candidatesFor(db: any, d: any): Promise<Candidate[]> {
  * Give the delivery to the best free rider (or to `riderId` when the admin
  * picks one). Returns the rider, or null if it has to wait.
  */
+/**
+ * Every approved rider, for the admin to choose from: free riders who can carry
+ * it first (closest first), then free riders whose balance is too low, then busy ones.
+ * The admin can give a parcel to a rider whose balance is too low.
+ */
+export async function adminChoices(db: any, d: any) {
+  const snap = await db.collection("riders").where("status", "==", "approved").get();
+  const o = originOf(d);
+  const out = snap.docs.map((doc: any) => {
+    const r = doc.data();
+    const pos = riderPosition(r);
+    const km = pos && o ? Math.round(distanceKm(pos, o) * 10) / 10 : null;
+    const busy = !!r.active_trade && r.active_trade !== d.id;
+    return {
+      id: r.id, name: r.name, city: r.city, km, busy, available: !!r.available,
+      same_city: o ? sameCity(r.city, o.city) : true,
+      max_value: maxPackageValue(r.balance),
+      can_carry: maxPackageValue(r.balance) >= Number(d.amount || 0),
+    };
+  });
+  const rank = (c: any) => (c.busy ? 4 : 0) + (c.same_city ? 0 : 2) + (c.can_carry ? 0 : 1);
+  return out.sort((a: any, b: any) => rank(a) - rank(b) || (a.km ?? 1e9) - (b.km ?? 1e9));
+}
+
 export async function assignRider(db: any, tradeId: string, opts: { riderId?: string; by?: string; prefer?: string } = {}): Promise<any | null> {
   const dRef = db.collection("deliveries").doc(tradeId);
   const dDoc = await dRef.get();
@@ -211,13 +235,20 @@ export async function assignRider(db: any, tradeId: string, opts: { riderId?: st
     if (!r) throw new Error("Rider not found");
     if (r.status !== "approved") throw new Error("This rider isn't approved");
     if (r.active_trade && r.active_trade !== tradeId) throw new Error("This rider already has a package");
-    if (maxPackageValue(r.balance) < Number(d.amount)) throw new Error(`This rider's balance only covers packages up to ${fcfa(maxPackageValue(r.balance))}`);
+    // The admin may give it to a rider whose balance is too low (marked over_limit)
     list = [r];
   } else {
     list = (await candidatesFor(db, d)).map((c) => c.rider);
     // The admin chose a rider when creating it: try them first, if they are free and can carry it
     const prefer = opts.prefer || d.preferred_rider;
-    if (prefer) list = [...list.filter((r) => r.id === prefer), ...list.filter((r) => r.id !== prefer)];
+    if (prefer) {
+      if (list.some((r) => r.id === prefer)) list = [...list.filter((r) => r.id === prefer), ...list.filter((r) => r.id !== prefer)];
+      else {
+        // The admin's choice goes first even if their balance is too low, as long as they're free
+        const p = (await db.collection("riders").doc(prefer).get()).data();
+        if (p && p.status === "approved" && (!p.active_trade || p.active_trade === tradeId)) list = [p, ...list];
+      }
+    }
   }
 
   for (const r of list) {
@@ -238,6 +269,7 @@ export async function assignRider(db: any, tradeId: string, opts: { riderId?: st
         rider_phone: rider.phone,
         assigned_at: nowIso(),
         assigned_by: opts.by || "auto",
+        over_limit: maxPackageValue(rider.balance) < Number(del.amount || 0),
         waiting_notified: false,
         history: history(del, "assigned", rider.name),
         updated_at: nowIso(),

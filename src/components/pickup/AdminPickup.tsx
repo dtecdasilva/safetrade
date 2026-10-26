@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { CheckCircle, Ban, Plus, Pencil, Banknote, LocateFixed, Copy, MessageCircle } from "lucide-react";
 import OriginPicker, { OriginValue, originReady } from "@/components/pickup/OriginPicker";
 import { PhoneField } from "@/components/ui";
@@ -10,6 +10,7 @@ import PickupMap from "@/components/pickup/Map";
 import PlaceSearch from "@/components/pickup/PlaceSearch";
 import { fmtDateTime, money } from "@/lib/zola";
 import { pickupUrl } from "@/lib/pickup/config";
+import AssignRider from "@/components/pickup/AssignRider";
 
 /** Admin tabs for Pickup: riders (approve, balance, withdrawals) and agency branches. Admin screens stay in English. */
 export default function AdminPickup({ tab }: { tab: "riders" | "agencies" | "deliveries" }) {
@@ -66,6 +67,7 @@ function Deliveries() {
   const [made, setMade] = useState<any>(null);
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState("");
+  const [assigning, setAssigning] = useState("");
   const load = useCallback(() => {
     fetch("/api/admin/pickup-deliveries").then((r) => r.json()).then((d) => setList(d.deliveries || [])).catch(() => setList([]));
     fetch("/api/admin/riders").then((r) => r.json()).then((d) => setRiders((d.riders || []).filter((r: any) => r.status === "approved"))).catch(() => {});
@@ -137,8 +139,10 @@ function Deliveries() {
               <label className="label" htmlFor="ad-rider">Rider</label>
               <select id="ad-rider" className="select" value={form.riderId} onChange={(e) => set("riderId", e.target.value)}>
                 <option value="">Closest free rider when paid</option>
-                {riders.map((r) => <option key={r.id} value={r.id}>{r.name}, {r.city}{r.active_trade ? " (busy now)" : r.available ? "" : " (off)"}, carries up to {money(r.max_value)}</option>)}
+                {riders.map((r) => <option key={r.id} value={r.id}>{r.name}, {r.city}{r.active_trade ? " (busy now)" : r.available ? "" : " (off)"}, carries up to {money(r.max_value)}{Number(form.value || 0) > r.max_value ? " (over limit)" : ""}</option>)}
               </select>
+              {(() => { const r = riders.find((x) => x.id === form.riderId); return r && Number(form.value || 0) > r.max_value
+                ? <p className="hint" style={{ color: "var(--amber-ink, #8a5a00)" }}>{r.name}&apos;s balance only covers {money(r.max_value)}. They&apos;ll still get it if they&apos;re free when the client pays; if it&apos;s lost, Zola carries the difference.</p> : null; })()}
             </div>
           </div>
           <div className="form-grid-2">
@@ -158,19 +162,27 @@ function Deliveries() {
             <thead><tr>{["Created", "Parcel", "From → to", "City", "Price", "Rider", "Status", ""].map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
             <tbody>
               {(list || []).map((d) => (
-                <tr key={d.id}>
+                <Fragment key={d.id}>
+                <tr>
                   <td className="hint num" suppressHydrationWarning>{fmtDateTime(d.created_at)}</td>
                   <td className="strong">{d.title}<p className="hint">{d.kind === "direct" ? (d.created_by === "admin" ? "Created by admin" : "Booked on Pickup") : "Zola order"} · {d.mode === "same_city" ? "same city" : "by agency"}</p></td>
                   <td>{d.sender} → {d.recipient}</td>
                   <td>{d.city}</td>
                   <td className="num">{d.fee ? money(d.fee) : "—"}</td>
-                  <td>{d.rider_name || "—"}</td>
+                  <td>{d.rider_name || "—"}{d.over_limit && <p className="hint">over their limit</p>}</td>
                   <td><Pill tone={d.status === "delivered" ? "ok" : d.status === "awaiting_payment" || d.status === "waiting_rider" ? "wait" : "info"}>{DELIVERY_STATUS[d.status as DeliveryStatus]?.label || d.status}</Pill></td>
                   <td>
-                    {d.trade_id ? <a href={`/trade/${d.trade_id}`}>Open</a>
-                      : d.link ? <button className="btn btn-secondary btn-sm" onClick={() => copy(d.link, d.id)}><Copy size={14} /> {copied === d.id ? "Copied" : d.status === "awaiting_payment" ? "Payment link" : "Link"}</button> : null}
+                    <div className="btn-row" style={{ flexWrap: "nowrap" }}>
+                      {d.trade_id ? <a href={`/trade/${d.trade_id}`}>Open</a>
+                        : d.link ? <button className="btn btn-secondary btn-sm" onClick={() => copy(d.link, d.id)}><Copy size={14} /> {copied === d.id ? "Copied" : d.status === "awaiting_payment" ? "Payment link" : "Link"}</button> : null}
+                      {["waiting_rider", "assigned"].includes(d.status) && <button className="btn btn-secondary btn-sm" onClick={() => setAssigning(assigning === d.id ? "" : d.id)}>{d.rider_name ? "Change rider" : "Assign rider"}</button>}
+                    </div>
                   </td>
                 </tr>
+                {assigning === d.id && (
+                  <tr><td colSpan={8}><AssignRider id={d.id} status={d.status} riderName={d.rider_name} onDone={() => { setAssigning(""); load(); }} /></td></tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -208,7 +220,7 @@ function Riders() {
 
   return (
     <div className="fade-up stack" style={{ gap: 14 }}>
-      <p className="hint">Riders sign up at <a href={pickupUrl()} target="_blank" rel="noopener noreferrer">{pickupUrl().replace(/^https?:\/\//, "")}</a>. Check their national ID in person before approving. A rider can carry parcels worth up to 70% of their balance, one at a time.</p>
+      <p className="hint">Riders sign up at <a href={pickupUrl()} target="_blank" rel="noopener noreferrer">{pickupUrl().replace(/^https?:\/\//, "")}</a>. Check their national ID in person before approving. A rider can carry parcels worth up to 70% of their balance, one at a time. You can still assign a parcel over that limit from Deliveries (Assign rider) or the transaction page.</p>
       {err && <div className="notice notice-danger" role="alert">{err}</div>}
 
       {pendingW.length > 0 && (

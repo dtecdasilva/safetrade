@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assignRider, candidatesFor, releaseRider } from "@/lib/pickup/deliveries";
+import { adminChoices, assignRider, releaseRider } from "@/lib/pickup/deliveries";
 
 /**
  * Admin: who could take this delivery (GET), or
  *   { action: "auto" }                  find the best free rider again
- *   { action: "assign", riderId }       give it to a chosen rider
+ *   { action: "assign", riderId }       give it to a chosen rider, even if their balance is too low for its value
  *   { action: "unassign" }              take it back from the rider (before it is sent)
  */
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -15,8 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const db: any = getDb();
   const d = (await db.collection("deliveries").doc(params.id).get()).data();
   if (!d) return NextResponse.json({ error: "Delivery not found" }, { status: 404 });
-  const list = await candidatesFor(db, { ...d, declined: [] });
-  return NextResponse.json({ candidates: list.map((c) => ({ id: c.rider.id, name: c.rider.name, km: c.km === null ? null : Math.round(c.km * 10) / 10 })) });
+  return NextResponse.json({ amount: Number(d.amount || 0), candidates: await adminChoices(db, { ...d, id: params.id }) });
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {

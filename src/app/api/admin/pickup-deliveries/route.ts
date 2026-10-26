@@ -17,7 +17,7 @@ export async function GET() {
       id: d.id, kind: d.kind || "zola", trade_id: d.trade_id || null, status: d.status, title: d.title, amount: d.amount, fee: d.fee || 0,
       city: originOf(d)?.city || d.city, mode: d.mode || (d.branch ? "out_of_town" : "same_city"),
       sender: d.sender?.name || d.seller_name, recipient: d.recipient?.name || d.buyer_name,
-      rider_name: d.rider_name || "", created_at: d.created_at, created_by: d.created_by || "zola",
+      rider_name: d.rider_name || "", over_limit: !!d.over_limit && !!d.rider_id, created_at: d.created_at, created_by: d.created_by || "zola",
       link: d.kind === "direct" ? manageUrl(d) : "",
     };
   }).sort((a: any, b: any) => (b.created_at > a.created_at ? 1 : -1));
