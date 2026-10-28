@@ -7,6 +7,7 @@ import { Search, X, ShieldCheck, CheckCircle, AlertTriangle, Trash2, Edit3, Bank
 import { reportReasonLabel } from "@/lib/reports";
 import AdminPickup from "@/components/pickup/AdminPickup";
 import Earnings from "@/components/admin/Earnings";
+import { CalendarFeed, CalendarRemind } from "@/components/admin/CalendarRemind";
 import { PageLoader, Pill, StatusPill } from "@/components/ui";
 import { WITHDRAWAL_STATUS, brandText, fmtDate, fmtDateTime, money, roleLabel, shortId, statusMeta } from "@/lib/zola";
 import { reviewLabel, reviewState } from "@/lib/review";
@@ -322,6 +323,7 @@ export default function AdminPage() {
         )}
 
         {/* ── TRANSACTIONS ── */}
+        {tab === "trades" && <CalendarFeed />}
         {tab === "trades" && (
           <div className="card fade-up" style={{ overflow: "hidden" }}>
             <div style={{ padding: 14, borderBottom: "1px solid var(--line-soft)" }}>
@@ -362,6 +364,7 @@ export default function AdminPage() {
                             {reviewState(t).complaintOpen ? "Settle complaint" : reviewState(t).contacted ? "View review" : "Call buyer"}
                           </Link>
                         ))}
+                        {t.status === "pending_release" && reviewState(t).windowOpen && <CalendarRemind trade={t} endsAt={reviewState(t).endsAt} compact />}
                         {t.status === "disputed" && <Link href={`/trade/${t.id}`} style={{ fontSize: 13.5, fontWeight: 600, color: "var(--error-ink)" }}>Review</Link>}
                       </td>
                     </tr>

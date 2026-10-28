@@ -5,6 +5,8 @@ export interface EmailPayload {
   subject: string;
   text: string;
   html?: string;
+  /** Files to attach, e.g. a calendar invite. Content is base64. */
+  attachments?: { filename: string; content: string; content_type?: string }[];
 }
 
 export interface EmailResult {
@@ -12,7 +14,7 @@ export interface EmailResult {
   error?: string;
 }
 
-export async function sendEmail({ to, subject, text, html }: EmailPayload): Promise<EmailResult> {
+export async function sendEmail({ to, subject, text, html, attachments }: EmailPayload): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const configuredFromEmail = process.env.EMAIL_FROM?.trim();
   const defaultFromEmail = "onboarding@resend.dev";
@@ -43,6 +45,7 @@ export async function sendEmail({ to, subject, text, html }: EmailPayload): Prom
   };
 
   if (html) body.html = html;
+  if (attachments?.length) body.attachments = attachments;
 
   let res: Response;
   try {

@@ -7,6 +7,7 @@ import { ArrowLeft, CheckCircle, AlertTriangle, Truck, ShieldCheck, RefreshCw, E
 import { MoneyRail, PageLoader, PhoneField, StatusPill, Steps, Timeline } from "@/components/ui";
 import { fmtDate, fmtDateTime, initials, money, shortId, statusMeta, statusStory, ViewerRole } from "@/lib/zola";
 import { COMPLAINT_MAX, COMPLAINT_MIN, REVIEW_HOURS, reviewState, timeLeft } from "@/lib/review";
+import { CalendarRemind } from "@/components/admin/CalendarRemind";
 import { ContactRow, SupportButtons, SupportLine } from "@/components/Support";
 import { handoverHow } from "@/lib/handover";
 import { prettyPhone } from "@/lib/support";
@@ -691,6 +692,7 @@ export default function TradePage() {
           {trade.buyer_name} confirmed delivery{trade.confirmed_at ? ` on ${fmtDateTime(trade.confirmed_at)}` : ""}.
           {" "}Three things have to be true before {money(trade.amount)} goes to {trade.vendor_name}.
         </p>
+        {review.windowOpen && review.endsAt && <CalendarRemind trade={trade} endsAt={review.endsAt} />}
 
         <ol className="checks">
           {/* 1. Call or text the buyer */}

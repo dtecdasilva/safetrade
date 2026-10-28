@@ -2,7 +2,8 @@ import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { sendEmail, emailLayout } from "@/lib/mail";
 import { supportLine, prettyPhone, siteUrl } from "@/lib/support";
-import { REVIEW_HOURS } from "@/lib/review";
+import { REVIEW_HOURS, reviewEnd } from "@/lib/review";
+import { CalEvent, buildIcs, googleCalendarUrl, payoutEvent } from "@/lib/calendar";
 
 /**
  * Notifications.
@@ -42,6 +43,8 @@ export interface NotificationInput {
   subject?: string;
   /** Set to false when this person already gets a fuller email for the same event. */
   email?: boolean;
+  /** Adds a calendar invite to the email (and an "Add to Google Calendar" link). */
+  calendar?: CalEvent;
 }
 
 export type TradeMove =
@@ -179,10 +182,17 @@ async function sendByEmail(items: NotificationInput[]): Promise<void> {
       const label = buttonLabel(link, lang);
       const subject = `Zola: ${title}${n.subject ? ` · ${n.subject}` : ""}`;
       const text = `${body}\n\n${label}: ${url}\n\n${supportLine(lang)}\n\nZola\n${lang === "fr" ? "Transactions sécurisées. Paiements simples." : "Secure transactions. Simple payments."}`;
-      const html = emailLayout({ heading: title, intro: body, cta: { label, url }, lang });
+      const cal = n.calendar;
+      const html = emailLayout({ heading: title, intro: body, cta: { label, url }, lang,
+        ...(cal ? { sections: [{ title: lang === "fr" ? "Ajouter à votre agenda" : "Add it to your calendar", items: [
+          { text: "Google Calendar", url: googleCalendarUrl(cal) },
+          { text: lang === "fr" ? "Autre agenda : ouvrez l'invitation jointe (invite.ics)" : "Another calendar: open the attached invite (invite.ics)" },
+        ] }] } : {}) });
+      const fullText = cal ? `${text}\n\n${lang === "fr" ? "Ajouter à Google Agenda" : "Add to Google Calendar"}: ${googleCalendarUrl(cal)}` : text;
+      const attachments = cal ? [{ filename: "invite.ics", content: Buffer.from(buildIcs([cal])).toString("base64"), content_type: "text/calendar" }] : undefined;
       for (const to of r.emails) {
         jobs.push(
-          sendEmail({ to, subject, text, html }).catch((e: any) =>
+          sendEmail({ to, subject, text: fullText, html, attachments }).catch((e: any) =>
             console.error("[notifications] email failed:", e?.message)
           )
         );
@@ -412,7 +422,9 @@ export async function notifyTradeMove(
           body_fr: `${itemFr} est maintenant en vérification pendant ${REVIEW_HOURS} heures. En cas de problème avec votre commande, faites une réclamation depuis la page de la transaction avant la fin de la vérification. Zola peut vous appeler ou vous écrire pour vérifier. Ensuite, le vendeur est payé.` });
         out.push({ ...base, userId: ADMIN_AUDIENCE, tone: "warn",
           title: "Review started: call or text the buyer",
-          body: `${buyer} confirmed delivery of ${item}. Call or text them${phone ? ` on ${phone}` : ""} to check, then release ${price} to ${seller} once the ${REVIEW_HOURS}-hour review is over.` });
+          body: `${buyer} confirmed delivery of ${item}. Call or text them${phone ? ` on ${phone}` : ""} to check, then release ${price} to ${seller} once the ${REVIEW_HOURS}-hour review is over.`,
+          // A reminder in the admin's calendar for when the 24 hours are over
+          calendar: payoutEvent(trade as any, (trade as any).review_ends_at || reviewEnd((trade as any).confirmed_at || Date.now()), siteUrl()) });
         break;
 
       case "complained": {

@@ -188,7 +188,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           `The buyer confirmed delivery. Zola reviews this for ${REVIEW_HOURS} hours before releasing the payment to the seller.`,
           "success"
         );
-        await notifyTradeMove("delivered", { ...(trade as any), id: params.id });
+        await notifyTradeMove("delivered", { ...(trade as any), id: params.id, confirmed_at: confirmedAt, review_ends_at: reviewEnd(confirmedAt) });
         // Notify vendor + admin
         if (vendor.phone) {
           notifyVendorDeliveryConfirmed({
