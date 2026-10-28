@@ -328,5 +328,20 @@ export const pickup: Record<string, string> = {
   "Send the parcel by bus to your Zola rider, then enter the agency and the receipt number.": "Envoyez le colis par car à votre livreur Zola, puis indiquez l'agence et le numéro du reçu.",
   "Enter the name of the agency you sent it with": "Indiquez le nom de l'agence utilisée pour l'envoi",
   "Choose the buyer's city": "Choisissez la ville de l'acheteur",
-  "Zola doesn't deliver in other cities yet": "Zola ne livre pas encore dans d'autres villes"
+  "Zola doesn't deliver in other cities yet": "Zola ne livre pas encore dans d'autres villes",
+  "{seller} is sending this parcel through {agency} in your name. Wait for the receipt number before you go to the agency.": "{seller} envoie ce colis par {agency} à votre nom. Attendez le numéro du reçu avant d'aller à l'agence.",
+  "Send it through <b>{agency}</b> to {place}, with this recipient:": "Envoyez-le par <b>{agency}</b> vers {place}, avec ce destinataire :",
+  "The buyer has paid. Send it through <b>{agency}</b> to {place}, with this recipient:": "L'acheteur a payé. Envoyez-le par <b>{agency}</b> vers {place}, avec ce destinataire :",
+  "Change it only if you used a different agency. The delivery price stays the same.": "Changez-la seulement si vous avez utilisé une autre agence. Le prix de la livraison reste le même.",
+  "Agencies others send to in {city}": "Agences utilisées par d'autres à {city}",
+  "Bus agency you'll send it with": "Agence de voyage pour l'envoi",
+  "Where is that agency in {city}?": "Où se trouve cette agence à {city} ?",
+  "Search the quarter, for example Mvan": "Cherchez le quartier, par exemple Mvan",
+  "Quarter": "Quartier",
+  "Quarter, for example Mvan": "Quartier, par exemple Mvan",
+  "I don't know where the agency is in {city}. Use the city centre for the price.": "Je ne sais pas où se trouve l'agence à {city}. Utiliser le centre-ville pour le prix.",
+  "Once the buyer pays, we give you a Zola rider in that city. You send the parcel to them through this agency, and they collect it there and deliver it to the buyer.": "Dès que l'acheteur paie, nous vous donnons un livreur Zola dans cette ville. Vous lui envoyez le colis par cette agence ; il le récupère là-bas et le livre à l'acheteur.",
+  "Once you pay, we give you a Pickup rider in that city. You send the parcel to them through this agency, and they collect it there and deliver it.": "Dès que vous payez, nous vous donnons un livreur Pickup dans cette ville. Vous lui envoyez le colis par cette agence ; il le récupère là-bas et le livre.",
+  "Enter the bus agency you will send it with": "Indiquez l'agence de voyage que vous utiliserez",
+  "Mark the agency's quarter on the map, or tick that you don't know it": "Indiquez le quartier de l'agence sur la carte, ou cochez que vous ne le savez pas"
 };

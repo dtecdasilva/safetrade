@@ -23,6 +23,7 @@ export default function DirectDelivery() {
   const [msg, setMsg] = useState("");
   const [receipt, setReceipt] = useState("");
   const [agency, setAgency] = useState("");
+  const [agencySet, setAgencySet] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -31,6 +32,7 @@ export default function DirectDelivery() {
     const j = await res.json().catch(() => ({}));
     if (!res.ok) { setError(j.error || "Delivery not found"); return; }
     setD(j.delivery);
+    if (!agencySet && j.delivery?.origin?.agency) { setAgency(j.delivery.origin.agency); setAgencySet(true); }
   }, [id, k]);
   useEffect(() => { load(); const i = setInterval(load, 10000); return () => clearInterval(i); }, [load]);
 
@@ -86,7 +88,7 @@ export default function DirectDelivery() {
         <p className="pk-tag">{t(meta.label)}</p>
         <h1 className="pk-h1" style={{ marginBottom: 6 }}>{d.title}</h1>
         <div className="kv"><span>{t("To")}</span><span style={{ textAlign: "right" }}>{d.recipient.name}, {prettyPhone(d.recipient.phone)}<br /><span className="hint">{d.dest.landmark}</span></span></div>
-        <div className="kv"><span>{t("From")}</span><span style={{ textAlign: "right" }}>{d.origin.kind === "city" ? t("By bus to {city}", { city: d.origin.city }) : <>{d.origin.label}{d.branch ? ` (${d.branch.city})` : ` (${d.origin.city})`}</>}</span></div>
+        <div className="kv"><span>{t("From")}</span><span style={{ textAlign: "right" }}>{d.origin.kind === "city" || d.origin.kind === "agency" ? (d.origin.agency ? `${d.origin.label} (${d.origin.city})` : t("By bus to {city}", { city: d.origin.city })) : <>{d.origin.label}{d.branch ? ` (${d.branch.city})` : ` (${d.origin.city})`}</>}</span></div>
         <div className="kv"><span>{t("Delivery price")}</span><strong>{money(d.fee)} <span className="hint">({d.km} km)</span></strong></div>
         <PickupMap markers={markers} height={240} follow="rider" />
       </section>
@@ -132,7 +134,9 @@ export default function DirectDelivery() {
           <h2 className="pk-h2">{t("Send the parcel to your Pickup rider")}</h2>
           <p className="hint" style={{ marginBottom: 10 }}>{d.branch
             ? rich(t("Send it through <b>{agency}</b> to the <b>{branch}</b> branch in {city}, with this recipient:", { agency: d.branch.agency, branch: d.branch.name, city: d.branch.city }), { b: (c) => <strong>{c}</strong> })
-            : rich(t("Send it to <b>{city}</b> by any bus agency, with this recipient:", { city: d.origin.city }), { b: (c) => <strong>{c}</strong> })}</p>
+            : d.origin.agency
+              ? rich(t("Send it through <b>{agency}</b> to {place}, with this recipient:", { agency: d.origin.agency, place: d.origin.kind === "agency" && d.origin.landmark ? `${d.origin.landmark}, ${d.origin.city}` : d.origin.city }), { b: (c) => <strong>{c}</strong> })
+              : rich(t("Send it to <b>{city}</b> by any bus agency, with this recipient:", { city: d.origin.city }), { b: (c) => <strong>{c}</strong> })}</p>
           <div className="pk-recipient">
             <div><p className="label">{t("Recipient's name")}</p><p className="pk-big">{d.rider_name}</p></div>
             <div><p className="label">{t("Recipient's phone")}</p><p className="pk-big num">{prettyPhone(d.rider_phone)}</p></div>

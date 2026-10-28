@@ -9,6 +9,7 @@ import { cleanPhone as normalizePhone, cleanEmail, isEmail } from "@/lib/users";
 import { INVITED_BUYER_NAME, INVITED_SELLER_NAME, invitedBuyerId, invitedSellerId, inviteSummary, sendBuyerInvite, sendSellerInvite, sellerInviteSummary } from "@/lib/invites";
 import { siteUrl } from "@/lib/support";
 import { originFromBody, pickupOn, pickupPrice } from "@/lib/pickup/tradeDelivery";
+import { rememberAgency } from "@/lib/pickup/agencies";
 import {
   notifyBuyerTradeCreated,
   notifyAdminTradeCreated,
@@ -128,6 +129,7 @@ export async function POST(req: NextRequest) {
     const destBranch = (choice as any).branch || null;
     // Remember the seller's pickup spot for next time
     if ((choice as any).mode === "same_city") await db.collection("users").doc(session.id).update({ pickup_spot: (choice as any).origin }).catch(() => {});
+    if (usePickup) await rememberAgency(db, (choice as any).origin);
 
     const id  = randomUUID();
     const now = new Date().toISOString();

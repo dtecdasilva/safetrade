@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import { notifyTradeMove } from "@/lib/notifications";
 import { startDelivery, markSent } from "@/lib/pickup/deliveries";
 import { originFromBody, pickupOn, pickupPrice, tradeDest } from "@/lib/pickup/tradeDelivery";
+import { rememberAgency } from "@/lib/pickup/agencies";
 import { COMPLAINT_MAX, COMPLAINT_MIN, REVIEW_HOURS, reviewEnd, reviewState } from "@/lib/review";
 import {
   notifyBuyerTradeCreated,
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             delivery_fee: priced!.delivery_fee, delivery_km: priced!.delivery_km, delivery_pending: priced!.delivery_pending, buyer_total: priced!.buyer_total } : {}),
         });
         if (choice.mode === "same_city") await db.collection("users").doc(session.id).update({ pickup_spot: choice.origin }).catch(() => {});
+        await rememberAgency(db, choice.origin);
         await addEvent("Seller confirmed", `${session.name} confirmed the details. The buyer can now pay.`, "success");
         await notifyTradeMove("accepted", { ...(trade as any), id: params.id });
         // The approved "trade created" WhatsApp template fits: it asks the buyer to pay
@@ -139,7 +141,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         if (delivery) {
           if (delivery.status === "waiting_rider")
             return NextResponse.json({ error: "Wait until a rider is assigned: you need their name to write on the parcel." }, { status: 400 });
-          if (!delivery.branch && agencyName.length < 2)
+          if (!delivery.branch && !delivery.origin?.agency && agencyName.length < 2)
             return NextResponse.json({ error: "Enter the name of the agency you sent it with" }, { status: 400 });
           if (receipt.length < 3)
             return NextResponse.json({ error: "Enter the receipt number the agency gave you" }, { status: 400 });
@@ -148,7 +150,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         await updateTrade({ status: "shipped", tracking_number: receipt });
         if (delivery) {
           await markSent(db, params.id, receipt, agencyName);
-          await addEvent("Sent through the agency", `The seller sent the parcel through ${agencyName || delivery.branch?.agency || "a bus agency"} to ${delivery.rider_name}. Receipt: ${receipt}`, "info");
+          await addEvent("Sent through the agency", `The seller sent the parcel through ${agencyName || delivery.origin?.agency || delivery.branch?.agency || "a bus agency"} to ${delivery.rider_name}. Receipt: ${receipt}`, "info");
         } else {
           await addEvent(
             goods ? "Item sent to Zola" : "Marked as delivered",

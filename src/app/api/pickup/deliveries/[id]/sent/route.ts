@@ -12,7 +12,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (d.status !== "assigned") return NextResponse.json({ error: d.status === "waiting_rider" ? "Wait until a rider is assigned: you need their name to write on the parcel." : "This parcel has already been sent" }, { status: 400 });
   const r = String(receipt || "").trim().slice(0, 60);
   const ag = String(agency || "").trim();
-  if (!d.branch && ag.length < 2) return NextResponse.json({ error: "Enter the name of the agency you sent it with" }, { status: 400 });
+  if (!d.branch && !d.origin?.agency && ag.length < 2) return NextResponse.json({ error: "Enter the name of the agency you sent it with" }, { status: 400 });
   if (r.length < 3) return NextResponse.json({ error: "Enter the receipt number the agency gave you" }, { status: 400 });
   await markSent(db, params.id, r, ag);
   return NextResponse.json({ success: true });

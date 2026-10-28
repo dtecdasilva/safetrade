@@ -101,13 +101,19 @@ export type DeliveryMode = "same_city" | "out_of_town";
 
 /** Where the rider collects the parcel. */
 export interface Origin {
-  /** spot: the sender's place (same city). branch: a chosen agency branch. city: the centre of the buyer's city (sent by any agency). */
-  kind: "spot" | "branch" | "city";
+  /**
+   * spot: the sender's place (same city). agency: the bus agency office in the
+   * buyer's city, marked by the sender. city: the city centre (the sender didn't
+   * know the agency's quarter). branch: an agency branch (older transactions).
+   */
+  kind: "spot" | "branch" | "city" | "agency";
   lat: number; lng: number;
   city: string;
   /** "Touristique Express, Akwa" or the sender's landmark. */
   label: string;
   landmark?: string;
+  /** Another city: the bus agency the sender sends it with, e.g. "Touristique Express". */
+  agency?: string;
 }
 
 export function branchOrigin(b: any): Origin {

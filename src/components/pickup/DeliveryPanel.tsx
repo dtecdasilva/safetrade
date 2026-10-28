@@ -22,7 +22,7 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
 }) {
   const { t, lang } = useT();
   const [receipt, setReceipt] = useState("");
-  const [agency, setAgency] = useState("");
+  const [agency, setAgency] = useState<string>(delivery?.origin?.agency || trade.origin?.agency || "");
   const [copied, setCopied] = useState(false);
   const [editSpot, setEditSpot] = useState(false);
   const branch = delivery?.branch || trade.dest_branch || null;
@@ -32,7 +32,8 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
   const sentAgency = delivery?.sent_agency || "";
   const fromText = sameCity ? (viewer === "buyer" ? t("The seller, in {city}", { city: origin?.city || "" }) : `${origin?.label} (${origin?.city})`)
     : branch ? `${branch.agency}, ${branch.name} (${branch.city})`
-    : sentAgency ? `${sentAgency} (${origin?.city || ""})` : t("A bus agency in {city}", { city: origin?.city || "" });
+    : sentAgency || origin?.agency ? `${sentAgency || origin?.agency}${origin?.kind === "agency" && origin?.landmark ? `, ${origin.landmark}` : ""} (${origin?.city || ""})`
+    : t("A bus agency in {city}", { city: origin?.city || "" });
   const status: DeliveryStatus = delivery?.status || "waiting_rider";
   const label = t((DELIVERY_STATUS[status] || DELIVERY_STATUS.waiting_rider).label);
   const track = delivery?.track_code ? `${pickupUrl()}/track/${delivery.track_code}` : "";
@@ -73,7 +74,9 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
         <p style={{ fontSize: 14.5, margin: "2px 0 14px", color: "var(--emerald-press)" }}>
           {branch
             ? rich(t("The buyer has paid. Send it through <b>{agency}</b> to the <b>{branch}</b> branch in {city}, with this recipient:", { agency: branch.agency, branch: branch.name, city: branch.city }), { b: (c) => <strong>{c}</strong> })
-            : rich(t("The buyer has paid. Send it to <b>{city}</b> by any bus agency, with this recipient:", { city: origin?.city || "" }), { b: (c) => <strong>{c}</strong> })}
+            : origin?.agency
+              ? rich(t("The buyer has paid. Send it through <b>{agency}</b> to {place}, with this recipient:", { agency: origin.agency, place: origin.kind === "agency" && origin.landmark ? `${origin.landmark}, ${origin.city}` : origin.city }), { b: (c) => <strong>{c}</strong> })
+              : rich(t("The buyer has paid. Send it to <b>{city}</b> by any bus agency, with this recipient:", { city: origin?.city || "" }), { b: (c) => <strong>{c}</strong> })}
         </p>
         <div className="pk-recipient">
           <div><p className="label">{t("Recipient's name")}</p><p className="pk-big">{delivery.rider_name}</p></div>
@@ -83,6 +86,7 @@ export default function DeliveryPanel({ trade, delivery, viewer, onChange, act, 
         {!branch && (
           <div className="field" style={{ marginBottom: 12 }}>
             <label className="label" htmlFor="agency">{t("Agency you sent it with")}</label>
+            {origin?.agency && <p className="hint">{t("Change it only if you used a different agency. The delivery price stays the same.")}</p>}
             <input id="agency" className="input" maxLength={80} value={agency} onChange={(e) => setAgency(e.target.value)} placeholder={t("For example: Touristique Express")} />
           </div>
         )}

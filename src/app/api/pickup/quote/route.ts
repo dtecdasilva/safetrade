@@ -10,7 +10,8 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}));
   const db: any = getDb();
   let from: any = null;
-  if (b.destCity) { const c = await findCity(db, b.destCity); if (c) from = { lat: c.lat, lng: c.lng }; }
+  if (isPoint({ lat: b.agencyLat, lng: b.agencyLng }) && !b.agencyUnknown) from = { lat: Number(b.agencyLat), lng: Number(b.agencyLng) };
+  else if (b.destCity) { const c = await findCity(db, b.destCity); if (c) from = { lat: c.lat, lng: c.lng }; }
   else if (b.destBranchId) { const br = await branchSnapshot(db, b.destBranchId); if (br) from = { lat: br.lat, lng: br.lng }; }
   else if (isPoint({ lat: b.originLat, lng: b.originLng })) from = { lat: Number(b.originLat), lng: Number(b.originLng) };
   const to = { lat: Number(b.destLat), lng: Number(b.destLng) };

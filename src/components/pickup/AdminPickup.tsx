@@ -17,10 +17,11 @@ export default function AdminPickup({ tab }: { tab: "riders" | "agencies" | "del
   return tab === "riders" ? <Riders /> : tab === "deliveries" ? <Deliveries /> : (
     <>
       <Cities />
+      <AgencySpots />
       <Settings />
       <details className="card card-pad" style={{ marginTop: 14 }}>
         <summary className="section-title" style={{ cursor: "pointer" }}>Agency branches (optional)</summary>
-        <p className="hint" style={{ margin: "6px 0 12px" }}>Not needed: sellers just choose the buyer&apos;s city and send by any bus agency. Older transactions that used a branch still show it.</p>
+        <p className="hint" style={{ margin: "6px 0 12px" }}>Not needed: sellers type the agency and mark its quarter themselves. Older transactions that used a branch still show it.</p>
         <Agencies />
       </details>
     </>
@@ -88,7 +89,7 @@ function Deliveries() {
   useEffect(() => {
     setPrice(null);
     if (!dest) return;
-    const from = origin.deliveryMode === "out_of_town" ? (origin.destCity ? { destCity: origin.destCity } : origin.destBranchId ? { destBranchId: origin.destBranchId } : null) : Number.isFinite(origin.originLat) ? { originLat: origin.originLat, originLng: origin.originLng } : null;
+    const from = origin.deliveryMode === "out_of_town" ? (origin.destCity ? { destCity: origin.destCity, agencyLat: origin.agencyLat, agencyLng: origin.agencyLng, agencyUnknown: origin.agencyUnknown } : origin.destBranchId ? { destBranchId: origin.destBranchId } : null) : Number.isFinite(origin.originLat) ? { originLat: origin.originLat, originLng: origin.originLng } : null;
     if (!from) return;
     fetch("/api/pickup/quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...from, destLat: dest.lat, destLng: dest.lng }) })
       .then((r) => r.json()).then((d) => d.fee && setPrice(d)).catch(() => {});
@@ -493,6 +494,42 @@ function Cities() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Agency offices senders have marked. They are suggested to the next senders; hide wrong ones. */
+function AgencySpots() {
+  const [list, setList] = useState<any[] | null>(null);
+  const load = useCallback(() => { fetch("/api/admin/agency-spots").then((r) => r.json()).then((d) => setList(d.spots || [])).catch(() => setList([])); }, []);
+  useEffect(() => { load(); }, [load]);
+  const toggle = async (id: string, hidden: boolean) => {
+    await fetch("/api/admin/agency-spots", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, hidden }) });
+    load();
+  };
+  if (!list || list.length === 0) return null;
+  return (
+    <div className="card" style={{ overflow: "hidden", marginBottom: 14 }}>
+      <div className="card-pad" style={{ paddingBottom: 8 }}>
+        <h2 className="section-title">Agency offices senders use</h2>
+        <p className="hint">Saved from what sellers and senders marked, and suggested to the next ones in that city. Hide any that look wrong.</p>
+      </div>
+      <div className="table-wrap">
+        <table className="table" style={{ minWidth: 0 }}>
+          <thead><tr><th>City</th><th>Agency</th><th>Quarter</th><th>Used</th><th></th></tr></thead>
+          <tbody>
+            {list.map((a) => (
+              <tr key={a.id} style={a.hidden ? { opacity: 0.55 } : undefined}>
+                <td>{a.city}</td><td className="strong">{a.agency}</td><td>{a.quarter || "—"}</td><td className="num">{a.uses}</td>
+                <td style={{ textAlign: "right" }}>
+                  <a className="btn btn-ghost btn-sm" href={`https://www.google.com/maps?q=${a.lat},${a.lng}`} target="_blank" rel="noopener noreferrer">Map</a>
+                  <button className="btn btn-secondary btn-sm" onClick={() => toggle(a.id, !a.hidden)}>{a.hidden ? "Show" : "Hide"}</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

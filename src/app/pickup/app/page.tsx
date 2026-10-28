@@ -160,7 +160,7 @@ export default function RiderApp() {
           <h2 id="job-title" className="pk-h2">{job.title}</h2>
           <div className="kv"><span>{t("Value")}</span><span>{money(job.amount)}</span></div>
           <div className="kv"><span>{t("You earn")}</span><strong>{money(job.rider_pay)}</strong></div>
-          <div className="kv"><span>{t("Collect at")}</span><span style={{ textAlign: "right" }}>{sameCity ? job.seller_name : job.branch ? job.origin?.label : (job.sent_agency || t("A bus agency"))}<br /><span className="hint">{sameCity ? job.origin?.label : job.branch ? job.origin?.landmark || job.origin?.city : job.origin?.city}</span></span></div>
+          <div className="kv"><span>{t("Collect at")}</span><span style={{ textAlign: "right" }}>{sameCity ? job.seller_name : job.branch ? job.origin?.label : (job.sent_agency || job.origin?.agency || t("A bus agency"))}<br /><span className="hint">{sameCity ? job.origin?.label : job.branch ? job.origin?.landmark || job.origin?.city : job.origin?.kind === "agency" && job.origin?.landmark ? `${job.origin.landmark}, ${job.origin.city}` : job.origin?.city}</span></span></div>
           {job.receipt_no && <div className="kv"><span>{t("Agency receipt")}</span><strong className="num">{job.receipt_no}</strong></div>}
 
           <PickupMap markers={markers} height={220} follow="me" />
@@ -183,9 +183,11 @@ export default function RiderApp() {
             <>
               <p className="hint" style={{ margin: "12px 0" }}>{job.branch
                 ? t("{seller} is sending this parcel in your name. Wait for the agency receipt number before you go to the branch.", { seller: job.seller_name })
-                : t("{seller} is sending this parcel to {city} by bus, in your name. You'll see which agency and the receipt number here once it's sent.", { seller: job.seller_name, city: job.origin?.city || "" })}</p>
+                : job.origin?.agency
+                  ? t("{seller} is sending this parcel through {agency} in your name. Wait for the receipt number before you go to the agency.", { seller: job.seller_name, agency: job.origin.agency })
+                  : t("{seller} is sending this parcel to {city} by bus, in your name. You'll see which agency and the receipt number here once it's sent.", { seller: job.seller_name, city: job.origin?.city || "" })}</p>
               <div className="btn-row">
-                {job.branch && <a className="btn btn-secondary" href={mapsLink(job.origin)} target="_blank" rel="noopener noreferrer"><Navigation size={16} /> {t("Directions to the branch")}</a>}
+                {(job.branch || job.origin?.kind === "agency") && <a className="btn btn-secondary" href={mapsLink(job.origin)} target="_blank" rel="noopener noreferrer"><Navigation size={16} /> {t("Directions to the branch")}</a>}
                 <button className="btn btn-danger-outline" disabled={busy} onClick={() => { if (confirm(t("Give this delivery to another rider?"))) post("/api/pickup/job", { action: "decline" }); }}>{t("I can't take it")}</button>
               </div>
               <p className="hint" style={{ marginTop: 10 }}>{t("Already have it? You can mark it as collected.")} <button className="link-btn" onClick={() => setConfirmCollect(true)}>{t("Collected")}</button></p>
@@ -194,11 +196,11 @@ export default function RiderApp() {
 
           {(job.status === "sent" || (job.status === "assigned" && !sameCity && confirmCollect)) && (
             <>
-              <p className="hint" style={{ margin: "12px 0" }}>{job.branch || !job.sent_agency
+              <p className="hint" style={{ margin: "12px 0" }}>{job.branch || !(job.sent_agency || job.origin?.agency)
                 ? t("Collect it at the branch with the receipt number. Open it and check it matches what was ordered before you take it.")
-                : t("Collect it at the {agency} office in {city} with the receipt number. Open it and check it matches what was ordered before you take it.", { agency: job.sent_agency, city: job.origin?.city || "" })}</p>
+                : t("Collect it at the {agency} office in {city} with the receipt number. Open it and check it matches what was ordered before you take it.", { agency: job.sent_agency || job.origin.agency, city: job.origin?.kind === "agency" && job.origin?.landmark ? `${job.origin.landmark}, ${job.origin.city}` : job.origin?.city || "" })}</p>
               <div className="btn-row">
-                {job.branch && <a className="btn btn-secondary" href={mapsLink(job.origin)} target="_blank" rel="noopener noreferrer"><Navigation size={16} /> {t("Directions to the branch")}</a>}
+                {(job.branch || job.origin?.kind === "agency") && <a className="btn btn-secondary" href={mapsLink(job.origin)} target="_blank" rel="noopener noreferrer"><Navigation size={16} /> {t("Directions to the branch")}</a>}
                 <button className="btn btn-primary" disabled={busy} onClick={() => post("/api/pickup/job", { action: "collected" })}><PackageCheck size={16} /> {t("I've collected it")}</button>
               </div>
             </>

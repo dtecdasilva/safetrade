@@ -7,6 +7,7 @@ import { Lang, translate } from "@/lib/i18n/core";
 import { brandText } from "@/lib/zola";
 
 const RULES: [RegExp, string][] = [
+  [/^(.+) \(Pickup\) will collect the parcel at the (.+) office in (.+) once the seller sends it\.$/, "$1 (Pickup) récupérera le colis à l'agence $2 de $3 dès que le vendeur l'envoie."],
   [/^(.+) \(Pickup\) will collect the parcel at a bus agency in (.+) once the seller sends it\.$/, "$1 (Pickup) récupérera le colis dans une agence de voyage à $2 dès que le vendeur l'envoie."],
   [/^(.+) \(Pickup\) will collect the parcel at (.+), (.+) branch, (.+) once the seller sends it\.$/, "$1 (Pickup) récupérera le colis chez $2, agence de $3, $4 dès que le vendeur l'envoie."],
   [/^(.+) \(Pickup\) will collect the parcel at (.+), (.+) branch, (.+)\.$/, "$1 (Pickup) récupérera le colis chez $2, agence de $3, $4."],

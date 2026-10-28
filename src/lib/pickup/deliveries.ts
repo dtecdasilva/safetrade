@@ -90,7 +90,11 @@ export function arrivalPlace(d: any, fr = false): string {
   const b = d?.branch;
   const city = b?.city || originOf(d)?.city || d?.city || "";
   if (b) return fr ? `${b.agency}, agence de ${b.name}, ${b.city}` : `${b.agency}, ${b.name} branch, ${b.city}`;
-  if (d?.sent_agency) return fr ? `l'agence ${d.sent_agency} à ${city}` : `the ${d.sent_agency} office in ${city}`;
+  const o = originOf(d);
+  const agency = d?.sent_agency || o?.agency || "";
+  const quarter = o?.kind === "agency" && o.landmark ? o.landmark : "";
+  if (agency && quarter) return fr ? `l'agence ${agency} de ${quarter}, ${city}` : `the ${agency} office in ${quarter}, ${city}`;
+  if (agency) return fr ? `l'agence ${agency} à ${city}` : `the ${agency} office in ${city}`;
   return fr ? `une agence de voyage à ${city}` : `a bus agency in ${city}`;
 }
 
@@ -369,11 +373,15 @@ async function onAssigned(db: any, d: any, rider: any) {
             title: `Send “${d.title}” to ${rider.name}`,
             body: b
               ? `Send the parcel through ${b.agency} to the ${b.name} branch in ${b.city}. Write this recipient on it: ${rider.name}, ${phone}. Then enter the agency receipt number on the transaction.`
-              : `Send the parcel to ${o.city} by any bus agency. Write this recipient on it: ${rider.name}, ${phone}. Then enter the agency's name and the receipt number on the transaction.`,
+              : o.agency
+                ? `Send the parcel through ${o.agency} to ${o.landmark ? `${o.landmark}, ` : ""}${o.city}. Write this recipient on it: ${rider.name}, ${phone}. Then enter the receipt number on the transaction.`
+                : `Send the parcel to ${o.city} by any bus agency. Write this recipient on it: ${rider.name}, ${phone}. Then enter the agency's name and the receipt number on the transaction.`,
             title_fr: `Envoyez « ${d.title} » à ${rider.name}`,
             body_fr: b
               ? `Envoyez le colis par ${b.agency} à l'agence de ${b.name}, ${b.city}. Écrivez ce destinataire dessus : ${rider.name}, ${phone}. Ensuite, indiquez le numéro du reçu de l'agence sur la transaction.`
-              : `Envoyez le colis à ${o.city} par n'importe quelle agence de voyage. Écrivez ce destinataire dessus : ${rider.name}, ${phone}. Ensuite, indiquez le nom de l'agence et le numéro du reçu sur la transaction.` },
+              : o.agency
+                ? `Envoyez le colis par ${o.agency} vers ${o.landmark ? `${o.landmark}, ` : ""}${o.city}. Écrivez ce destinataire dessus : ${rider.name}, ${phone}. Ensuite, indiquez le numéro du reçu sur la transaction.`
+                : `Envoyez le colis à ${o.city} par n'importe quelle agence de voyage. Écrivez ce destinataire dessus : ${rider.name}, ${phone}. Ensuite, indiquez le nom de l'agence et le numéro du reçu sur la transaction.` },
       { userId: trade.buyer_id, tone: "info", link: `/trade/${d.trade_id}`, tradeId: d.trade_id, subject: d.title, email: false,
         title: "A rider will bring your order",
         body: `${rider.name} from Pickup will collect “${d.title}” and bring it to you. You can follow it on a map from the transaction page.`,
@@ -387,10 +395,12 @@ async function onAssigned(db: any, d: any, rider: any) {
       sameCityMode
         ? `${rider.name} (${phone}) is coming to collect "${d.title}". Hand it over only to this rider.`
         : b ? `Send "${d.title}" through ${b.agency} to the ${b.name} branch in ${b.city}, with this recipient: ${rider.name}, ${phone}. Then enter the receipt number on your delivery page.`
+            : o.agency ? `Send "${d.title}" through ${o.agency} to ${o.landmark ? `${o.landmark}, ` : ""}${o.city}, with this recipient: ${rider.name}, ${phone}. Then enter the receipt number on your delivery page.`
             : `Send "${d.title}" to ${o.city} by any bus agency, with this recipient: ${rider.name}, ${phone}. Then enter the agency's name and the receipt number on your delivery page.`,
       sameCityMode
         ? `${rider.name} (${phone}) vient récupérer « ${d.title} ». Remettez-le uniquement à ce livreur.`
         : b ? `Envoyez « ${d.title} » par ${b.agency} à l'agence de ${b.name}, ${b.city}, avec ce destinataire : ${rider.name}, ${phone}. Ensuite, indiquez le numéro du reçu sur votre page de livraison.`
+            : o.agency ? `Envoyez « ${d.title} » par ${o.agency} vers ${o.landmark ? `${o.landmark}, ` : ""}${o.city}, avec ce destinataire : ${rider.name}, ${phone}. Ensuite, indiquez le numéro du reçu sur votre page de livraison.`
             : `Envoyez « ${d.title} » à ${o.city} par n'importe quelle agence de voyage, avec ce destinataire : ${rider.name}, ${phone}. Ensuite, indiquez le nom de l'agence et le numéro du reçu sur votre page de livraison.`);
   }
 
@@ -411,7 +421,9 @@ async function onAssigned(db: any, d: any, rider: any) {
         intro: sameCityMode
           ? (fr ? "Allez récupérer le colis auprès de l'expéditeur, puis livrez-le." : "Go and collect the parcel from the sender, then deliver it.")
           : b ? (fr ? `Le colis est envoyé à votre nom par ${b.agency}. Nous vous dirons quand il est parti.` : `The parcel is being sent in your name through ${b.agency}. We'll tell you when it has left.`)
-              : (fr ? `Le colis est envoyé à votre nom par une agence de voyage vers ${o.city}. Nous vous dirons laquelle dès qu'il est parti.` : `The parcel is being sent to ${o.city} in your name by bus. We'll tell you which agency as soon as it has left.`),
+              : o.agency
+                ? (fr ? `Le colis est envoyé à votre nom par ${o.agency}. Nous vous dirons quand il est parti.` : `The parcel is being sent in your name through ${o.agency}. We'll tell you when it has left.`)
+                : (fr ? `Le colis est envoyé à votre nom par une agence de voyage vers ${o.city}. Nous vous dirons laquelle dès qu'il est parti.` : `The parcel is being sent to ${o.city} in your name by bus. We'll tell you which agency as soon as it has left.`),
         rows: [
           [fr ? "Colis" : "Parcel", d.title],
           [fr ? "Valeur" : "Value", fcfa(d.amount)],
@@ -429,7 +441,7 @@ export async function markSent(db: any, deliveryId: string, receipt: string, age
   const ref = db.collection("deliveries").doc(deliveryId);
   const d0 = (await ref.get()).data();
   if (!d0 || d0.status !== "assigned") return;
-  const sentAgency = String(agency || "").replace(/\s+/g, " ").trim().slice(0, 80) || d0.branch?.agency || "";
+  const sentAgency = String(agency || "").replace(/\s+/g, " ").trim().slice(0, 80) || originOf(d0)?.agency || d0.branch?.agency || "";
   await ref.update({ status: "sent", receipt_no: receipt, sent_agency: sentAgency, sent_at: nowIso(), history: history(d0, "sent"), updated_at: nowIso() });
   const d = { ...d0, sent_agency: sentAgency };
   const r = (await db.collection("riders").doc(d.rider_id).get()).data();

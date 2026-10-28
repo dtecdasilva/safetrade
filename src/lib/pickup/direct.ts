@@ -20,6 +20,7 @@ import { isPoint, pickupUrl, quoteDelivery, riderPayFor } from "@/lib/pickup/con
 import { getPickupSettings } from "@/lib/pickup/settings";
 import { assignRider, handoverCode, trackCode } from "@/lib/pickup/deliveries";
 import { originFromBody } from "@/lib/pickup/tradeDelivery";
+import { rememberAgency } from "@/lib/pickup/agencies";
 import { sendNotifications, ADMIN_AUDIENCE } from "@/lib/notifications";
 
 export const DIRECT_PREFIX = "pkd_";
@@ -108,6 +109,7 @@ export async function createDirect(db: any, v: any, opts: { by: "public" | "admi
     created_at: nowIso(), updated_at: nowIso(),
   };
   await db.collection("deliveries").doc(id).set(d);
+  await rememberAgency(db, d.origin);
 
   if (d.sender.email) {
     const fr = d.lang === "fr";

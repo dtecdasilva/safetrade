@@ -40,11 +40,11 @@ export default function TrackPage() {
 
   const sameCity = d.mode === "same_city";
   // Where it arrives: the chosen branch (older deliveries), the agency the sender used, or the city
-  const arrive = d.branch ? `${d.branch.agency} ${d.branch.name}` : d.sent_agency ? `${d.sent_agency}, ${d.city}` : d.city;
+  const arrive = d.branch ? `${d.branch.agency} ${d.branch.name}` : d.sent_agency ? `${d.sent_agency}, ${d.city}` : d.origin?.label && d.origin.label !== d.city ? `${d.origin.label}, ${d.city}` : d.city;
   const line =
     d.status === "awaiting_payment" ? t("This delivery starts once it has been paid.")
     : d.status === "waiting_rider" ? (sameCity ? t("We're finding a rider near the sender.") : t("We're finding a rider near {branch}.", { branch: arrive }))
-    : d.status === "assigned" ? (sameCity ? t("{rider} is on the way to collect your parcel.", { rider: d.rider }) : t("{rider} will collect your parcel at {branch} once the seller sends it.", { rider: d.rider, branch: d.branch ? arrive : t("the bus agency in {city}", { city: d.city }) }))
+    : d.status === "assigned" ? (sameCity ? t("{rider} is on the way to collect your parcel.", { rider: d.rider }) : t("{rider} will collect your parcel at {branch} once the seller sends it.", { rider: d.rider, branch: d.branch || d.origin?.label !== d.city ? arrive : t("the bus agency in {city}", { city: d.city }) }))
     : d.status === "sent" ? (d.branch
         ? t("Your parcel is travelling with {agency} to the {branch} branch. {rider} collects it when it arrives.", { agency: d.branch.agency, branch: d.branch.name, rider: d.rider })
         : t("Your parcel is travelling by bus to {city}{agency}. {rider} collects it when it arrives.", { city: d.city, agency: d.sent_agency ? ` (${d.sent_agency})` : "", rider: d.rider }))
@@ -61,7 +61,7 @@ export default function TrackPage() {
         <PickupMap markers={markers} height={320} follow="rider" />
         {d.status === "collected" && !d.rider_loc && <p className="hint" style={{ marginTop: 8 }}>{t("The rider's location will appear here as they move.")}</p>}
         <div className="pk-legend">
-          <span><i className="pk-pin pk-pin-branch" /> {sameCity ? t("Pickup point") : d.branch ? t("Agency branch") : t("City")}</span>
+          <span><i className="pk-pin pk-pin-branch" /> {sameCity ? t("Pickup point") : d.branch || d.origin?.label !== d.city ? t("Agency") : t("City")}</span>
           <span><i className="pk-pin pk-pin-rider" /> {t("Rider")}</span>
           <span><i className="pk-pin pk-pin-dest" /> {t("You")}</span>
         </div>
